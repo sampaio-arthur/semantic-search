@@ -135,6 +135,8 @@ export interface DatasetIndexStatus {
   accepted?: boolean;
 }
 
+type DatasetIndexStatusListener = (status: DatasetIndexStatus) => void;
+
 class ApiClient {
   private getToken(): string | null {
     return localStorage.getItem('access_token');
@@ -405,15 +407,24 @@ class ApiClient {
     return response.json();
   }
 
-  async indexDataset(datasetId: string, forceReindex = false): Promise<void> {
+  async indexDataset(
+    datasetId: string,
+    forceReindex = false,
+    onStatus?: DatasetIndexStatusListener
+  ): Promise<void> {
     let status = await this.getDatasetIndexStatus(datasetId);
     if (forceReindex || status.status === 'idle' || status.status === 'failed') {
       status = await this.startDatasetIndex(datasetId, forceReindex);
     }
 
+    if (status.status === 'running') {
+      onStatus?.(status);
+    }
+
     while (status.status === 'running') {
       await new Promise((resolve) => window.setTimeout(resolve, INDEX_POLL_INTERVAL_MS));
       status = await this.getDatasetIndexStatus(datasetId);
+      onStatus?.(status);
     }
 
     if (status.status === 'failed') {

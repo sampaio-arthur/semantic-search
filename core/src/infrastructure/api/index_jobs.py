@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Callable
 
+from audit import audit_print
 from infrastructure.api.deps import build_services
 from infrastructure.config import get_settings
 from infrastructure.db.session import get_session_factory
@@ -56,6 +57,7 @@ class IndexJobRegistry:
         with self._lock:
             current = self._jobs.get(dataset_id)
             if current and current.status == "running":
+                audit_print("index.job.start.reused", dataset_id=dataset_id, force_reindex=force_reindex)
                 return IndexJobState(**asdict(current))
             state = IndexJobState(
                 dataset_id=dataset_id,
@@ -68,6 +70,7 @@ class IndexJobRegistry:
                 updated_at=_utcnow(),
             )
             self._jobs[dataset_id] = state
+        audit_print("index.job.start.created", dataset_id=dataset_id, force_reindex=force_reindex)
         thread = threading.Thread(
             target=self._run_job,
             args=(dataset_id, force_reindex),
@@ -90,6 +93,7 @@ class IndexJobRegistry:
         settings = get_settings()
         session = get_session_factory(settings)()
         try:
+            audit_print("index.job.run.start", dataset_id=dataset_id, force_reindex=force_reindex)
             services = build_services(session, settings)
             if not force_reindex:
                 snap = services.dataset_snapshots.get(dataset_id)
@@ -110,14 +114,17 @@ class IndexJobRegistry:
                         s.error = None
 
                     self._update(dataset_id, _mark_skipped)
+                    audit_print("index.job.run.skipped", dataset_id=dataset_id, docs_count=docs_count, reason="already_indexed")
                     return
 
             dataset_meta = services.index_dataset.datasets.get_dataset(dataset_id)
             total_hint = dataset_meta.get("document_count") if isinstance(dataset_meta, dict) else None
             self._update(dataset_id, lambda s: setattr(s, "total_hint", total_hint))
+            audit_print("index.job.run.dataset_loaded", dataset_id=dataset_id, total_hint=total_hint)
 
             def progress_cb(indexed_count: int) -> None:
                 self._update(dataset_id, lambda s: setattr(s, "indexed_count", indexed_count))
+                audit_print("index.job.run.progress", dataset_id=dataset_id, indexed_count=indexed_count, total_hint=total_hint)
 
             result = services.index_dataset.execute(dataset_id, progress_callback=progress_cb)
             def _mark_completed(s: IndexJobState) -> None:
@@ -128,6 +135,7 @@ class IndexJobRegistry:
                 s.error = None
 
             self._update(dataset_id, _mark_completed)
+            audit_print("index.job.run.completed", dataset_id=dataset_id, result=result)
         except Exception as exc:
             def _mark_failed(s: IndexJobState) -> None:
                 s.status = "failed"
@@ -135,6 +143,7 @@ class IndexJobRegistry:
                 s.error = str(exc)
 
             self._update(dataset_id, _mark_failed)
+            audit_print("index.job.run.failed", dataset_id=dataset_id, error=str(exc))
         finally:
             session.close()
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { MessageList } from '@/components/chat/MessageList';
@@ -9,7 +10,7 @@ import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ComparisonPanel } from '@/components/chat/ComparisonPanel';
 import { PipelinePanel } from '@/components/chat/PipelinePanel';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, Conversation, Message, SearchResponse } from '@/lib/api';
+import { api, Conversation, DatasetIndexStatus, Message, SearchResponse } from '@/lib/api';
 
 const DEFAULT_DATASET_ID = 'beir/trec-covid';
 
@@ -22,6 +23,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [indexStatus, setIndexStatus] = useState<DatasetIndexStatus | null>(null);
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
 
@@ -119,7 +121,9 @@ export default function Chat() {
       const userMessage = await api.addMessage(conversationId, 'user', userText || 'Consulta');
       setMessages((prev) => [...prev, userMessage]);
 
-      await api.indexDataset(DEFAULT_DATASET_ID);
+      await api.indexDataset(DEFAULT_DATASET_ID, false, (status) => {
+        setIndexStatus(status.status === 'running' ? status : null);
+      });
       const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
 
       setLastResponse(searchResponse);
@@ -128,6 +132,7 @@ export default function Chat() {
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      setIndexStatus(null);
       const detail = error instanceof Error ? error.message : 'Erro desconhecido';
       setMessages((prev) => [
         ...prev,
@@ -139,9 +144,14 @@ export default function Chat() {
         },
       ]);
     } finally {
+      setIndexStatus(null);
       setIsLoading(false);
     }
   };
+
+  const indexProgressValue = indexStatus?.total_hint && indexStatus.total_hint > 0
+    ? Math.min(100, Math.round(((indexStatus.indexed_count ?? 0) / indexStatus.total_hint) * 100))
+    : 0;
 
   if (authLoading) {
     return (
@@ -194,6 +204,20 @@ export default function Chat() {
         </div>
 
         <div className="pb-6 pt-2">
+          {indexStatus?.status === 'running' && (
+            <div className="px-4 pb-3">
+              <div className="rounded-lg border border-border bg-card px-4 py-3">
+                <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium text-foreground">Indexando dataset</span>
+                  <span className="text-muted-foreground">
+                    {indexStatus.indexed_count ?? 0}
+                    {indexStatus.total_hint ? ` / ${indexStatus.total_hint}` : ''}
+                  </span>
+                </div>
+                <Progress value={indexProgressValue} />
+              </div>
+            </div>
+          )}
           <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
       </main>

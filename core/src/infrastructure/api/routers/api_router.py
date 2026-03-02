@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 
+from audit import audit_print, preview_text
 from domain.entities import Document, SearchResult
 from domain.exceptions import ConflictError, DomainError, NotFoundError, UnauthorizedError, ValidationError
 from infrastructure.api.deps import Services, get_current_user_id, get_services
@@ -306,6 +307,7 @@ def index_dataset(payload: IndexRequest, user_id: int = Depends(get_current_user
     if services.settings.require_admin_for_indexing and not (user and user.is_admin):
         raise HTTPException(status_code=403, detail="Admin required")
     try:
+        audit_print("api.index.sync.request", user_id=user_id, dataset_id=payload.dataset_id, force_reindex=payload.force_reindex)
         return services.index_dataset.execute(payload.dataset_id)
     except DomainError as exc:
         raise _handle_domain_error(exc) from exc
@@ -316,17 +318,20 @@ def compat_index_dataset(payload: IndexRequest, user_id: int = Depends(get_curre
     user = services.users.get_by_id(user_id)
     if services.settings.require_admin_for_indexing and not (user and user.is_admin):
         raise HTTPException(status_code=403, detail="Admin required")
+    audit_print("api.index.async.request", user_id=user_id, dataset_id=payload.dataset_id, force_reindex=payload.force_reindex)
     state = index_job_registry.start(payload.dataset_id, force_reindex=payload.force_reindex)
     return {"accepted": True, **state.to_dict()}
 
 
 @compat_router.get("/search/dataset/index/status")
 def compat_index_dataset_status(dataset_id: str, services: Services = Depends(get_services)):
+    audit_print("api.index.status.request", dataset_id=dataset_id)
     state = index_job_registry.get(dataset_id)
     if state.status == "idle":
         snapshot = services.dataset_snapshots.get(dataset_id)
         docs_count = services.documents.count_by_dataset(dataset_id)
         if snapshot and docs_count > 0 and snapshot.document_count == docs_count:
+            audit_print("api.index.status.completed_from_snapshot", dataset_id=dataset_id, docs_count=docs_count)
             return {
                 "dataset_id": dataset_id,
                 "status": "completed",
@@ -349,6 +354,16 @@ def compat_index_dataset_status(dataset_id: str, services: Services = Depends(ge
 
 
 def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Services) -> dict:
+    audit_print(
+        "api.search.request",
+        user_id=user_id,
+        dataset_id=payload.dataset_id,
+        mode=payload.mode,
+        top_k=payload.top_k,
+        chat_id=payload.chat_id,
+        query_id=payload.query_id,
+        query=preview_text(payload.query),
+    )
     result = services.search.execute(dataset=payload.dataset_id, query=payload.query, mode=payload.mode, top_k=payload.top_k)
     output: dict[str, Any] = {
         "query": result["query"],
@@ -379,6 +394,14 @@ def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Se
         assistant_payload = services.build_assistant_message.execute(result)
         services.add_message.save_assistant_retrieval_result(user_id, payload.chat_id, assistant_payload)
         output["chat_persisted"] = True
+    audit_print(
+        "api.search.response",
+        user_id=user_id,
+        dataset_id=payload.dataset_id,
+        mode=output.get("mode"),
+        result_count=len(output.get("results") or []),
+        has_comparison="comparison" in output,
+    )
     return output
 
 

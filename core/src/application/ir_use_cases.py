@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+from audit import audit_print, preview_results, preview_text, preview_vector
 from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
 from domain.exceptions import NotFoundError, ValidationError
 from domain.ports import (
@@ -43,11 +44,35 @@ class IndexDatasetUseCase:
         dataset_meta = self.datasets.get_dataset(dataset_id)
         if not dataset_meta:
             raise NotFoundError("Dataset not found.")
+        audit_print(
+            "index.use_case.start",
+            dataset_id=dataset_id,
+            dataset_name=dataset_meta.get("name"),
+            document_count_hint=dataset_meta.get("document_count"),
+            query_count_hint=dataset_meta.get("query_count"),
+        )
         batch: list[Document] = []
         document_ids: list[str] = []
         total = 0
         for item in self.datasets.iter_documents(dataset_id):
             text = item["text"]
+            audit_print(
+                "index.document.received",
+                dataset_id=dataset_id,
+                doc_id=item["doc_id"],
+                title=preview_text(item.get("title"), limit=80),
+                text=preview_text(text),
+                metadata_keys=sorted((item.get("metadata") or {}).keys()),
+            )
+            embedding_vector = self.embedding_encoder.encode(text)
+            quantum_vector = self.quantum_encoder.encode(text)
+            audit_print(
+                "index.document.encoded",
+                dataset_id=dataset_id,
+                doc_id=item["doc_id"],
+                embedding=preview_vector(embedding_vector),
+                quantum=preview_vector(quantum_vector),
+            )
             document_ids.append(item["doc_id"])
             batch.append(
                 Document(
@@ -56,17 +81,41 @@ class IndexDatasetUseCase:
                     title=item.get("title"),
                     text=text,
                     metadata=item.get("metadata", {}),
-                    embedding_vector=self.embedding_encoder.encode(text),
-                    quantum_vector=self.quantum_encoder.encode(text),
+                    embedding_vector=embedding_vector,
+                    quantum_vector=quantum_vector,
                 )
             )
             if len(batch) >= 64:
+                audit_print(
+                    "index.batch.flush",
+                    dataset_id=dataset_id,
+                    batch_size=len(batch),
+                    doc_ids=[doc.doc_id for doc in batch],
+                )
                 total += self.documents.upsert_documents(batch)
+                audit_print(
+                    "index.batch.persisted",
+                    dataset_id=dataset_id,
+                    batch_size=len(batch),
+                    indexed_total=total,
+                )
                 if progress_callback is not None:
                     progress_callback(total)
                 batch.clear()
         if batch:
+            audit_print(
+                "index.batch.flush",
+                dataset_id=dataset_id,
+                batch_size=len(batch),
+                doc_ids=[doc.doc_id for doc in batch],
+            )
             total += self.documents.upsert_documents(batch)
+            audit_print(
+                "index.batch.persisted",
+                dataset_id=dataset_id,
+                batch_size=len(batch),
+                indexed_total=total,
+            )
             if progress_callback is not None:
                 progress_callback(total)
         query_snapshot = []
@@ -80,6 +129,16 @@ class IndexDatasetUseCase:
                     "query_text": q["query_text"],
                     "relevant_doc_ids": relevant_doc_ids,
                 }
+            )
+            audit_print(
+                "index.query.received",
+                dataset_id=dataset_id,
+                query_id=q["query_id"],
+                split=str(q.get("split") or "test"),
+                query_text=preview_text(str(q["query_text"])),
+                relevant_doc_ids_preview=relevant_doc_ids[:10],
+                relevant_doc_ids_count=len(relevant_doc_ids),
+                qrels_count=len(qrels),
             )
             qrels_count += len(qrels)
             if self.ground_truths is not None:
@@ -108,7 +167,7 @@ class IndexDatasetUseCase:
                     queries=query_snapshot,
                 )
             )
-        return {
+        result = {
             "dataset_id": dataset_id,
             "indexed_count": total,
             "embedding_dim": self.embedding_encoder.dim,
@@ -117,6 +176,8 @@ class IndexDatasetUseCase:
             "snapshot_query_count": len(query_snapshot),
             "qrels_count": qrels_count,
         }
+        audit_print("index.use_case.completed", **result)
+        return result
 
 
 class SearchUseCase:
@@ -128,14 +189,44 @@ class SearchUseCase:
     def _search_single(self, dataset: str, query: str, pipeline: Pipeline, top_k: int):
         started = time.perf_counter()
         if pipeline == Pipeline.CLASSICAL:
+            audit_print(
+                "search.pipeline.start",
+                dataset_id=dataset,
+                pipeline=pipeline.value,
+                top_k=top_k,
+                query=preview_text(query),
+            )
             qv = self.embedding_encoder.encode(query)
             results = self.documents.search_by_embedding(dataset, qv, top_k)
             latency_ms = (time.perf_counter() - started) * 1000.0
+            audit_print(
+                "search.pipeline.completed",
+                dataset_id=dataset,
+                pipeline=pipeline.value,
+                latency_ms=round(latency_ms, 3),
+                query_vector=preview_vector(qv),
+                results=preview_results(results),
+            )
             return results, latency_ms
         if pipeline == Pipeline.QUANTUM:
+            audit_print(
+                "search.pipeline.start",
+                dataset_id=dataset,
+                pipeline=pipeline.value,
+                top_k=top_k,
+                query=preview_text(query),
+            )
             qv = self.quantum_encoder.encode(query)
             results = self.documents.search_by_quantum(dataset, qv, top_k)
             latency_ms = (time.perf_counter() - started) * 1000.0
+            audit_print(
+                "search.pipeline.completed",
+                dataset_id=dataset,
+                pipeline=pipeline.value,
+                latency_ms=round(latency_ms, 3),
+                query_vector=preview_vector(qv),
+                results=preview_results(results),
+            )
             return results, latency_ms
         raise ValidationError("Invalid pipeline.")
 
@@ -215,28 +306,39 @@ class SearchUseCase:
         }
 
     def execute(self, dataset: str, query: str, mode: str = "compare", top_k: int = 5) -> dict:
+        audit_print(
+            "search.use_case.start",
+            dataset_id=dataset,
+            mode=mode,
+            top_k=top_k,
+            query=preview_text(query),
+        )
         if mode == Pipeline.CLASSICAL.value:
             results, latency_ms = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
-            return {
+            payload = {
                 "query": query,
                 "mode": mode,
                 "results": results,
                 "metrics": self._search_metrics(results, latency_ms, top_k),
                 "algorithm_details": self._algorithm_details(Pipeline.CLASSICAL),
             }
+            audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
+            return payload
         if mode == Pipeline.QUANTUM.value:
             results, latency_ms = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
-            return {
+            payload = {
                 "query": query,
                 "mode": mode,
                 "results": results,
                 "metrics": self._search_metrics(results, latency_ms, top_k),
                 "algorithm_details": self._algorithm_details(Pipeline.QUANTUM),
             }
+            audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
+            return payload
         if mode == Pipeline.COMPARE.value:
             classical, classical_latency = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
             quantum, quantum_latency = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
-            return {
+            payload = {
                 "query": query,
                 "mode": Pipeline.COMPARE.value,
                 "results": classical,
@@ -254,6 +356,15 @@ class SearchUseCase:
                 },
                 "comparison_metrics": self._compare_rankings(classical, quantum, top_k),
             }
+            audit_print(
+                "search.use_case.completed",
+                dataset_id=dataset,
+                mode=mode,
+                classical_results=preview_results(classical),
+                quantum_results=preview_results(quantum),
+                common_doc_ids=payload["comparison_metrics"]["common_doc_ids"],
+            )
+            return payload
         raise ValidationError("Invalid mode. Use 'classical', 'quantum', or 'compare'.")
 
 

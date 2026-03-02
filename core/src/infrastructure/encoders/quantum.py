@@ -5,6 +5,7 @@ import math
 
 import numpy as np
 
+from audit import audit_print, preview_text, preview_vector
 from domain.exceptions import ValidationError
 from domain.ir import l2_normalize
 
@@ -55,9 +56,26 @@ class PennyLaneQuantumEncoder:
     def encode(self, text: str) -> list[float]:
         if self._qnode is None:
             raise ValidationError("Quantum encoder unavailable: PennyLane is not installed/loaded.")
+        audit_print(
+            "encoder.quantum.encode.start",
+            n_qubits=self.n_qubits,
+            dim=self.dim,
+            text=preview_text(text),
+        )
         angles = self._angles_from_text(text)
+        audit_print(
+            "encoder.quantum.angles.computed",
+            n_qubits=self.n_qubits,
+            angles=[round(float(value), 6) for value in angles.tolist()],
+        )
         try:
             probs = [float(x) for x in self._qnode(angles).tolist()]
         except Exception as exc:
             raise ValidationError(f"Quantum encoder failed to encode text: {exc}") from exc
-        return l2_normalize([float(np.float32(x)) for x in probs])
+        normalized = l2_normalize([float(np.float32(x)) for x in probs])
+        audit_print(
+            "encoder.quantum.encode.completed",
+            n_qubits=self.n_qubits,
+            vector=preview_vector(normalized),
+        )
+        return normalized

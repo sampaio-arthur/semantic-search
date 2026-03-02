@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
+from audit import audit_print, preview_results, preview_text, preview_vector
 from domain.entities import Chat, ChatMessage, DatasetSnapshot, Document, GroundTruth, MessageRole, SearchResult, User
 from domain.ports import (
     ChatRepositoryPort,
@@ -167,8 +168,18 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
         self.session = session
 
     def upsert_documents(self, documents: list[Document]) -> int:
+        audit_print("repository.documents.upsert.start", batch_size=len(documents))
         count = 0
         for item in documents:
+            audit_print(
+                "repository.documents.upsert.item",
+                dataset_id=item.dataset,
+                doc_id=item.doc_id,
+                title=preview_text(item.title, limit=80),
+                text=preview_text(item.text),
+                embedding=preview_vector(item.embedding_vector),
+                quantum=preview_vector(item.quantum_vector),
+            )
             row = self.session.scalar(select(DocumentModel).where(DocumentModel.dataset == item.dataset, DocumentModel.doc_id == item.doc_id))
             if row is None:
                 row = DocumentModel(dataset=item.dataset, doc_id=item.doc_id, title=item.title, text=item.text)
@@ -180,6 +191,7 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
             row.quantum_vector = item.quantum_vector
             count += 1
         self.session.commit()
+        audit_print("repository.documents.upsert.completed", batch_size=len(documents), persisted=count)
         return count
 
     def count_by_dataset(self, dataset: str) -> int:
@@ -199,6 +211,13 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
         column = getattr(DocumentModel, field)
         if dialect != "postgresql" or not hasattr(column, "cosine_distance"):
             raise RuntimeError("Search requires PostgreSQL + pgvector cosine_distance support.")
+        audit_print(
+            "repository.documents.search.start",
+            dataset_id=dataset,
+            field=field,
+            top_k=top_k,
+            query_vector=preview_vector(query_vector),
+        )
         stmt = (
             select(DocumentModel, (1 - column.cosine_distance(query_vector)).label("score"))
             .where(DocumentModel.dataset == dataset)
@@ -206,10 +225,18 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
             .limit(top_k)
         )
         rows = self.session.execute(stmt).all()
-        return [
+        results = [
             SearchResult(doc_id=row.DocumentModel.doc_id, text=row.DocumentModel.text, score=float(row.score), metadata=row.DocumentModel.metadata_json or {})
             for row in rows
         ]
+        audit_print(
+            "repository.documents.search.completed",
+            dataset_id=dataset,
+            field=field,
+            top_k=top_k,
+            results=preview_results(results),
+        )
+        return results
 
 
 class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
