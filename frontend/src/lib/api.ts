@@ -81,7 +81,9 @@ export interface SearchMetrics {
   spearman?: number | null;
   answer_similarity?: number | null;
   has_ideal_answer: boolean;
-  latency_ms: number;
+  encode_time_ms: number;
+  search_time_ms: number;
+  total_time_ms: number;
   k: number;
   candidate_k: number;
   has_labels: boolean;

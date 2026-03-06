@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 from sklearn.decomposition import PCA  # type: ignore
 
-from audit import audit_print, preview_text, preview_vector
+from audit import audit_print, category_log, preview_text, preview_vector
 from domain.exceptions import ValidationError
 from domain.ir import l2_normalize
 from infrastructure.encoders.base import SharedSbertBase
@@ -48,6 +48,7 @@ class ClassicalPipelineEncoder:
             output_dim=self.dim,
             explained_variance_ratio=round(explained, 4),
         )
+        category_log("PCA", input_dim=raw_embeddings.shape[1], output_dim=self.dim, pipeline="classical")
 
     def transform(self, raw_embedding: np.ndarray) -> list[float]:
         """Apply PCA transform to a single raw embedding. Requires fit()."""
@@ -78,6 +79,8 @@ class ClassicalPipelineEncoder:
             pca_dim=self.dim,
             vector=preview_vector(result),
         )
+        category_log("PIPELINE classical", final_vector_dim=self.dim)
+        category_log("NORMALIZE", vector_norm=1.0)
         return result
 
     def save_state(self, path: str) -> None:

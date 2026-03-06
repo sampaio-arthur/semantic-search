@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from audit import audit_print
+from audit import audit_print, category_log
 from domain.exceptions import ValidationError
 
 try:
@@ -70,6 +70,7 @@ class SharedSbertBase:
             batch_size=len(texts),
             embedding_dim=self.base_dim,
         )
+        category_log("BASE", embedding_dim=self.base_dim)
         return vectors.astype(np.float64)
 
     def encode_single(self, text: str) -> np.ndarray:

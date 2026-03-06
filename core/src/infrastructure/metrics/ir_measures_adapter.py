@@ -3,7 +3,7 @@ from __future__ import annotations
 import ir_measures  # type: ignore
 from ir_measures import MRR, P, R, nDCG  # type: ignore
 
-from audit import audit_print
+from audit import audit_print, category_log
 from domain.entities import EvaluationResult
 
 
@@ -72,6 +72,16 @@ class IrMeasuresAdapter:
             recall=round(recall_val, 4),
             mrr=round(mrr_val, 4),
             precision=round(precision_val, 4),
+        )
+        category_log(
+            "METRICS",
+            _extra={
+                "pipeline": pipeline,
+                f"nDCG@{k}": round(ndcg_val, 4),
+                f"Recall@{k}": round(recall_val, 4),
+                "MRR": round(mrr_val, 4),
+                f"P@{k}": round(precision_val, 4),
+            },
         )
 
         return EvaluationResult(

@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 from sklearn.decomposition import PCA  # type: ignore
 
-from audit import audit_print, preview_text, preview_vector
+from audit import audit_print, category_log, preview_text, preview_vector
 from domain.exceptions import ValidationError
 from domain.ir import l2_normalize
 from infrastructure.encoders.base import SharedSbertBase
@@ -237,6 +237,8 @@ class QuantumPipelineEncoder:
             final_dim=self.dim,
             vector=preview_vector(result),
         )
+        category_log("PIPELINE quantum", base_vector_dim=self.dim, quantum_vector_dim=self.circuit_output_dim, concat_dim=self.dim + self.circuit_output_dim, final_vector_dim=self.dim)
+        category_log("NORMALIZE", vector_norm=1.0)
         return result
 
     def save_state(self, path: str) -> None:

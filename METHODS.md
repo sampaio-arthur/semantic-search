@@ -58,12 +58,20 @@ Arquivo: `core/src/infrastructure/encoders/statistical.py` (`StatisticalPipeline
 
 ```
 SBERT(384)
-  → PCA(n=128, random_state=seed)          → intermediate_128
+  → PCA(n=64, random_state=seed)           → base_vector_64
   → TruncatedSVD(n=64, random_state=seed) → L2 normalize → dim=64
 ```
 
-- Fatoracao linear em dois estagios: PCA centraliza o espaco, TruncatedSVD fatoriza ainda mais
+- Fatoracao linear em dois estagios partindo da mesma base de 64 dimensoes que os outros pipelines
+- PCA(64) centraliza e reduz o espaco; TruncatedSVD(64) fatoriza ainda mais sem recentrar
+- `svd_input_dim = 64 = VECTOR_DIM = PCA_INTERMEDIATE_DIM`
 - Ambas as transformacoes ajustadas sobre o corpus na indexacao
+
+Logs emitidos durante encode:
+```
+[PIPELINE statistical] base_vector_dim=64 svd_input_dim=64 svd_output_dim=64
+[NORMALIZE] vector_norm=1.0
+```
 
 Resultado armazenado em `documents.statistical_vector vector(64)`
 
@@ -132,10 +140,56 @@ Ao final do fit, cada encoder serializa seu estado (PCAs, SVD, min/max de angulo
 core/data/encoder_state/
 ├─ classical.joblib   # PCA(64) fitted
 ├─ quantum.joblib     # PCA_base(64) + PCA_angles(6) + PCA_final(64) + angle_min/max
-└─ statistical.joblib # PCA(128) + TruncatedSVD(64) fitted
+└─ statistical.joblib # PCA(64) + TruncatedSVD(64) fitted
 ```
 
 Na inicializacao do container, `_get_encoders()` em `deps.py` tenta carregar os arquivos automaticamente. Se presentes, os encoders ficam fitted sem precisar reindexar. O diretorio e configuravel via `ENCODER_STATE_DIR` (default: `/app/data/encoder_state`, que mapeia para `core/data/encoder_state/` no host pelo bind mount `./core:/app`).
+
+## Medicao de tempo
+
+Arquivo: `core/src/application/ir_use_cases.py` (`SearchUseCase._search_single`)
+
+Metodologia identica para os tres pipelines via `time.perf_counter()`:
+
+- `encode_time_ms` — intervalo entre inicio e fim do `encoder.encode(query)`
+- `search_time_ms` — intervalo entre fim do encode e fim da busca no pgvector
+- `total_time_ms` — soma de encode + search
+
+Retornados em `metrics.encode_time_ms`, `metrics.search_time_ms`, `metrics.total_time_ms` na resposta da API.
+
+Logs emitidos (uma linha por metrica):
+```
+[TIME] pipeline=classical encode_time_ms=5.2
+[TIME] pipeline=classical search_time_ms=1.1
+[TIME] pipeline=classical total_time_ms=6.3
+```
+
+## Logs de auditoria
+
+Arquivo: `core/src/audit.py`
+
+Dois mecanismos de log coexistem:
+
+1. `audit_print(event, **payload)` — JSON estruturado com timestamp, usado para rastreamento completo:
+   ```
+   [AUDIT] {"ts": "...", "event": "search.pipeline.completed", ...}
+   ```
+
+2. `category_log(category, **payload)` — formato textual por categoria, obrigatorio pela especificacao experimental:
+   ```
+   [BASE] embedding_dim=384
+   [PCA] input_dim=384 output_dim=64 pipeline=classical
+   [PIPELINE classical] final_vector_dim=64
+   [PIPELINE quantum] base_vector_dim=64 quantum_vector_dim=64 concat_dim=128 final_vector_dim=64
+   [PIPELINE statistical] base_vector_dim=64 svd_input_dim=64 svd_output_dim=64
+   [NORMALIZE] vector_norm=1.0
+   [VECTOR SAMPLE classical] values=[0.1234, -0.0312, ...]
+   [METRICS] pipeline=classical nDCG@10=0.42 Recall@10=0.38 MRR=0.51 P@10=0.21
+   [TIME] pipeline=classical encode_time_ms=5.2
+   [TIME] pipeline=classical search_time_ms=1.1
+   [TIME] pipeline=classical total_time_ms=6.3
+   [SEARCH] pipeline=classical top_k=10 results=10
+   ```
 
 ## Lote de indexacao
 
@@ -143,3 +197,5 @@ Arquivo: `core/src/application/ir_use_cases.py`
 
 - Persistencia em lotes de 64 documentos por flush/upsert
 - Reduz numero de commits e atualiza progresso do job de indexacao por lote
+- Validacao explícita de dimensao antes do upsert: `len(vector) != VECTOR_DIM` lanca `ValueError`
+- Amostra de vetor emitida no primeiro documento e a cada 100 documentos via `[VECTOR SAMPLE]`

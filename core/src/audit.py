@@ -47,3 +47,19 @@ def audit_print(event: str, **payload: Any) -> None:
         **payload,
     }
     print("[AUDIT] " + json.dumps(record, ensure_ascii=False, default=str), flush=True)
+
+
+def category_log(category: str, _extra: dict[str, Any] | None = None, **payload: Any) -> None:
+    """Emit a bracketed category log line as required by spec.
+
+    Use keyword args for simple identifiers:
+        category_log("BASE", embedding_dim=384)
+        → [BASE] embedding_dim=384
+
+    Use _extra dict for keys that are not valid Python identifiers (e.g. nDCG@10):
+        category_log("METRICS", _extra={"pipeline": "classical", "nDCG@10": 0.42})
+        → [METRICS] pipeline=classical nDCG@10=0.42
+    """
+    combined: dict[str, Any] = {**payload, **(_extra or {})}
+    parts = " ".join(f"{k}={v}" for k, v in combined.items())
+    print(f"[{category}] {parts}", flush=True)

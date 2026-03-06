@@ -122,10 +122,10 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                 </thead>
                 <tbody className='text-muted-foreground'>
                   <tr className='border-b border-border/60'>
-                    <td className='py-2 pr-3 text-foreground'>Latência (ms)</td>
-                    <td className='py-2 pr-3'>{classicalMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>
-                    <td className='py-2 pr-3'>{quantumMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>
-                    {hasStatistical && <td className='py-2 pr-3'>{statisticalMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>}
+                    <td className='py-2 pr-3 text-foreground'>Total (ms)</td>
+                    <td className='py-2 pr-3'>{classicalMetrics?.total_time_ms?.toFixed(1) ?? '-'}</td>
+                    <td className='py-2 pr-3'>{quantumMetrics?.total_time_ms?.toFixed(1) ?? '-'}</td>
+                    {hasStatistical && <td className='py-2 pr-3'>{statisticalMetrics?.total_time_ms?.toFixed(1) ?? '-'}</td>}
                     <td className='py-2'>Comparativo de custo/tempo (não é qualidade)</td>
                   </tr>
                   <tr className='border-b border-border/60'>

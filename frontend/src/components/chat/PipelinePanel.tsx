@@ -21,9 +21,9 @@ export function PipelinePanel({ response }: PipelinePanelProps) {
   const classicalCount = response.comparison.classical.results?.length ?? 0;
   const quantumCount = response.comparison.quantum.results?.length ?? 0;
   const statisticalCount = response.comparison.statistical?.results?.length ?? 0;
-  const classicalLatency = response.comparison.classical.metrics?.latency_ms;
-  const quantumLatency = response.comparison.quantum.metrics?.latency_ms;
-  const statisticalLatency = response.comparison.statistical?.metrics?.latency_ms;
+  const classicalLatency = response.comparison.classical.metrics?.total_time_ms;
+  const quantumLatency = response.comparison.quantum.metrics?.total_time_ms;
+  const statisticalLatency = response.comparison.statistical?.metrics?.total_time_ms;
   const hasStatistical = Boolean(response.comparison.statistical);
 
   return (

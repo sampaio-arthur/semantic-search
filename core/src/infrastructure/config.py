@@ -58,7 +58,8 @@ class Settings(BaseSettings):
     quantum_n_qubits: int = 6  # 2^6 = 64
 
     # Intermediate PCA dimension for statistical pipeline before TruncatedSVD.
-    pca_intermediate_dim: int = 128
+    # Must equal vector_dim so that svd_input_dim == vector_dim per spec.
+    pca_intermediate_dim: int = 64
 
     classical_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     seed: int = 42

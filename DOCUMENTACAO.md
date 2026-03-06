@@ -91,6 +91,11 @@ Modos suportados:
 2. Busca em `documents.statistical_vector`
 3. Score por similaridade cosseno, ordenacao descrescente
 
+**Medicao de tempo (identica para os tres pipelines)**:
+- `encode_time_ms` — tempo de geracao do vetor da query (`time.perf_counter()`)
+- `search_time_ms` — tempo da busca no pgvector
+- `total_time_ms` — soma de encode + search
+
 **Modo `compare`** retorna tambem:
 
 - `comparison.classical`, `comparison.quantum`, `comparison.statistical`
@@ -220,7 +225,7 @@ Arquivo: `core/src/infrastructure/config.py`
 - `CLASSICAL_MODEL_NAME` (default: `sentence-transformers/all-MiniLM-L6-v2`)
 - `VECTOR_DIM` (default: `64`) — dimensao final dos tres pipelines
 - `QUANTUM_N_QUBITS` (default: `6`) — invariante: `2^QUANTUM_N_QUBITS == VECTOR_DIM`
-- `PCA_INTERMEDIATE_DIM` (default: `128`) — dim intermediaria do pipeline estatistico
+- `PCA_INTERMEDIATE_DIM` (default: `64`) — dim intermediaria do pipeline estatistico (igual a `VECTOR_DIM` para que `svd_input_dim == 64`)
 - `SEED` (default: `42`) — semente para PCAs, SVD e pesos do circuito
 - `ENCODER_STATE_DIR` (default: `/app/data/encoder_state`) — diretorio onde o estado fitted dos encoders e persistido em disco
 

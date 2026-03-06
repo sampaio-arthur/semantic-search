@@ -6,9 +6,9 @@ Aplicacao full-stack para comparar busca semantica em tres pipelines de vetoriza
 |---|---|---|---|
 | **Classical** | SBERT → PCA(64) → L2 | `embedding_vector` | 64 |
 | **Quantum** | SBERT → PCA_base(64) → PCA_angles(6) → QCircuit(64) → Hellinger → concat(128) → PCA_final(64) → L2 | `quantum_vector` | 64 |
-| **Statistical** | SBERT → PCA(128) → TruncatedSVD(64) → L2 | `statistical_vector` | 64 |
+| **Statistical** | SBERT → PCA(64) → TruncatedSVD(64) → L2 | `statistical_vector` | 64 |
 
-Todos os tres pipelines compartilham o mesmo modelo base (`all-MiniLM-L6-v2`, 384 dim), o mesmo ajuste de PCA (nivel de corpus), o mesmo ranking por similaridade cosseno (pgvector) e as mesmas metricas (ir_measures). A unica variavel experimental e a **transformacao vetorial**.
+Todos os tres pipelines compartilham o mesmo modelo base (`all-MiniLM-L6-v2`, 384 dim), a mesma base semantica PCA(64) e o mesmo ranking por similaridade cosseno (pgvector) e as mesmas metricas (ir_measures). A unica variavel experimental e a **transformacao vetorial aplicada ao vetor base de 64 dimensoes**.
 
 ## Objetivo do projeto
 
@@ -16,7 +16,7 @@ Implementar e comparar tres fluxos de busca semantica sobre o mesmo dataset e co
 
 - **Pipeline classico**: SBERT → reducao PCA(64) → L2
 - **Pipeline quantico-inspirado**: SBERT → PCA residual → circuito PennyLane (StronglyEntanglingLayers) → Hellinger → concat → PCA_final → L2
-- **Pipeline estatistico**: SBERT → PCA(128) → TruncatedSVD(64) → L2
+- **Pipeline estatistico**: SBERT → PCA(64) → TruncatedSVD(64) → L2
 
 Objetivo da comparacao:
 
@@ -66,7 +66,7 @@ REFRESH_TOKEN_EXPIRE_MINUTES=10080
 CLASSICAL_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
 VECTOR_DIM=64
 QUANTUM_N_QUBITS=6
-PCA_INTERMEDIATE_DIM=128
+PCA_INTERMEDIATE_DIM=64
 SEED=42
 
 PASSWORD_RESET_EXPIRE_MINUTES=30
@@ -121,7 +121,7 @@ Servicos:
    - criar conversa
    - garantir indexacao do dataset `beir/trec-covid`
    - executar busca comparativa nos tres pipelines
-   - exibir paineis com latencia, scores e metricas
+   - exibir paineis com encode_time_ms, search_time_ms, total_time_ms, scores e metricas
 
 Observacoes:
 

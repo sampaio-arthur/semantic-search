@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from audit import audit_print, preview_results, preview_text, preview_vector
+from audit import audit_print, category_log, preview_results, preview_text, preview_vector
 from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
 from domain.exceptions import NotFoundError, ValidationError
 from domain.ports import (
@@ -139,10 +139,22 @@ class IndexDatasetUseCase:
         document_ids: list[str] = []
         total = 0
 
+        expected_dim = self.classical_encoder.dim
         for i, (item, raw) in enumerate(zip(doc_infos, raw_embeddings)):
             embedding_vector = self.classical_encoder.transform(raw)
             quantum_vector = self.quantum_encoder.transform(raw)
             statistical_vector = self.statistical_encoder.transform(raw)
+
+            # Explicit dimension validation before upsert
+            for vec, name in [
+                (embedding_vector, "classical"),
+                (quantum_vector, "quantum"),
+                (statistical_vector, "statistical"),
+            ]:
+                if vec is not None and len(vec) != expected_dim:
+                    raise ValueError(
+                        f"Vector dimension mismatch: {name} has {len(vec)}, expected {expected_dim}"
+                    )
 
             audit_print(
                 "index.document.encoded",
@@ -152,6 +164,12 @@ class IndexDatasetUseCase:
                 quantum=preview_vector(quantum_vector),
                 statistical=preview_vector(statistical_vector),
             )
+
+            # Emit [VECTOR SAMPLE] on first doc and every 100 docs
+            if i % 100 == 0:
+                category_log("VECTOR SAMPLE classical", _extra={"values": str([round(v, 4) for v in embedding_vector[:8]])})
+                category_log("VECTOR SAMPLE quantum", _extra={"values": str([round(v, 4) for v in quantum_vector[:8]])})
+                category_log("VECTOR SAMPLE statistical", _extra={"values": str([round(v, 4) for v in statistical_vector[:8]])})
 
             document_ids.append(item["doc_id"])
             batch.append(
@@ -282,7 +300,7 @@ class SearchUseCase:
         self.statistical_encoder = statistical_encoder
 
     def _search_single(self, dataset: str, query: str, pipeline: Pipeline, top_k: int):
-        started = time.perf_counter()
+        t0 = time.perf_counter()
         audit_print(
             "search.pipeline.start",
             dataset_id=dataset,
@@ -293,26 +311,41 @@ class SearchUseCase:
 
         if pipeline == Pipeline.CLASSICAL:
             qv = self.classical_encoder.encode(query)
+            t1 = time.perf_counter()
+            category_log("VECTOR SAMPLE classical", _extra={"values": str([round(v, 4) for v in qv[:8]])})
             results = self.documents.search_by_embedding(dataset, qv, top_k)
         elif pipeline == Pipeline.QUANTUM:
             qv = self.quantum_encoder.encode(query)
+            t1 = time.perf_counter()
+            category_log("VECTOR SAMPLE quantum", _extra={"values": str([round(v, 4) for v in qv[:8]])})
             results = self.documents.search_by_quantum(dataset, qv, top_k)
         elif pipeline == Pipeline.STATISTICAL:
             qv = self.statistical_encoder.encode(query)
+            t1 = time.perf_counter()
+            category_log("VECTOR SAMPLE statistical", _extra={"values": str([round(v, 4) for v in qv[:8]])})
             results = self.documents.search_by_statistical(dataset, qv, top_k)
         else:
             raise ValidationError("Invalid pipeline.")
 
-        latency_ms = (time.perf_counter() - started) * 1000.0
+        t2 = time.perf_counter()
+        encode_time_ms = round((t1 - t0) * 1000.0, 3)
+        search_time_ms = round((t2 - t1) * 1000.0, 3)
+        total_time_ms = round((t2 - t0) * 1000.0, 3)
         audit_print(
             "search.pipeline.completed",
             dataset_id=dataset,
             pipeline=pipeline.value,
-            latency_ms=round(latency_ms, 3),
+            encode_time_ms=encode_time_ms,
+            search_time_ms=search_time_ms,
+            total_time_ms=total_time_ms,
             query_vector=preview_vector(qv),
             results=preview_results(results),
         )
-        return results, latency_ms
+        category_log("TIME", _extra={"pipeline": pipeline.value, "encode_time_ms": encode_time_ms})
+        category_log("TIME", _extra={"pipeline": pipeline.value, "search_time_ms": search_time_ms})
+        category_log("TIME", _extra={"pipeline": pipeline.value, "total_time_ms": total_time_ms})
+        category_log("SEARCH", pipeline=pipeline.value, top_k=top_k, results=len(results))
+        return results, encode_time_ms, search_time_ms, total_time_ms
 
     def _algorithm_details(self, pipeline: Pipeline) -> dict:
         if pipeline == Pipeline.CLASSICAL:
@@ -385,7 +418,7 @@ class SearchUseCase:
             }
         return {}
 
-    def _search_metrics(self, results, latency_ms: float, top_k: int) -> dict:
+    def _search_metrics(self, results, encode_time_ms: float, search_time_ms: float, total_time_ms: float, top_k: int) -> dict:
         scores = [float(x.score) for x in results]
         return {
             "accuracy_at_k": None,
@@ -396,7 +429,9 @@ class SearchUseCase:
             "ndcg_at_k": None,
             "answer_similarity": None,
             "has_ideal_answer": False,
-            "latency_ms": latency_ms,
+            "encode_time_ms": encode_time_ms,
+            "search_time_ms": search_time_ms,
+            "total_time_ms": total_time_ms,
             "k": top_k,
             "candidate_k": top_k,
             "has_labels": False,
@@ -429,45 +464,45 @@ class SearchUseCase:
         )
 
         if mode == Pipeline.CLASSICAL.value:
-            results, latency_ms = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
+            results, enc_ms, srch_ms, tot_ms = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
             payload = {
                 "query": query,
                 "mode": mode,
                 "results": results,
-                "metrics": self._search_metrics(results, latency_ms, top_k),
+                "metrics": self._search_metrics(results, enc_ms, srch_ms, tot_ms, top_k),
                 "algorithm_details": self._algorithm_details(Pipeline.CLASSICAL),
             }
             audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
             return payload
 
         if mode == Pipeline.QUANTUM.value:
-            results, latency_ms = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
+            results, enc_ms, srch_ms, tot_ms = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
             payload = {
                 "query": query,
                 "mode": mode,
                 "results": results,
-                "metrics": self._search_metrics(results, latency_ms, top_k),
+                "metrics": self._search_metrics(results, enc_ms, srch_ms, tot_ms, top_k),
                 "algorithm_details": self._algorithm_details(Pipeline.QUANTUM),
             }
             audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
             return payload
 
         if mode == Pipeline.STATISTICAL.value:
-            results, latency_ms = self._search_single(dataset, query, Pipeline.STATISTICAL, top_k)
+            results, enc_ms, srch_ms, tot_ms = self._search_single(dataset, query, Pipeline.STATISTICAL, top_k)
             payload = {
                 "query": query,
                 "mode": mode,
                 "results": results,
-                "metrics": self._search_metrics(results, latency_ms, top_k),
+                "metrics": self._search_metrics(results, enc_ms, srch_ms, tot_ms, top_k),
                 "algorithm_details": self._algorithm_details(Pipeline.STATISTICAL),
             }
             audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
             return payload
 
         if mode == Pipeline.COMPARE.value:
-            classical, classical_latency = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
-            quantum, quantum_latency = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
-            statistical, statistical_latency = self._search_single(dataset, query, Pipeline.STATISTICAL, top_k)
+            classical, c_enc, c_srch, c_tot = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
+            quantum, q_enc, q_srch, q_tot = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
+            statistical, s_enc, s_srch, s_tot = self._search_single(dataset, query, Pipeline.STATISTICAL, top_k)
             payload = {
                 "query": query,
                 "mode": Pipeline.COMPARE.value,
@@ -475,17 +510,17 @@ class SearchUseCase:
                 "comparison": {
                     "classical": {
                         "results": classical,
-                        "metrics": self._search_metrics(classical, classical_latency, top_k),
+                        "metrics": self._search_metrics(classical, c_enc, c_srch, c_tot, top_k),
                         "algorithm_details": self._algorithm_details(Pipeline.CLASSICAL),
                     },
                     "quantum": {
                         "results": quantum,
-                        "metrics": self._search_metrics(quantum, quantum_latency, top_k),
+                        "metrics": self._search_metrics(quantum, q_enc, q_srch, q_tot, top_k),
                         "algorithm_details": self._algorithm_details(Pipeline.QUANTUM),
                     },
                     "statistical": {
                         "results": statistical,
-                        "metrics": self._search_metrics(statistical, statistical_latency, top_k),
+                        "metrics": self._search_metrics(statistical, s_enc, s_srch, s_tot, top_k),
                         "algorithm_details": self._algorithm_details(Pipeline.STATISTICAL),
                     },
                 },

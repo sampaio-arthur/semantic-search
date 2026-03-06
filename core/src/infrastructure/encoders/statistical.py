@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from sklearn.decomposition import PCA, TruncatedSVD  # type: ignore
 
-from audit import audit_print, preview_text, preview_vector
+from audit import audit_print, category_log, preview_text, preview_vector
 from domain.exceptions import ValidationError
 from domain.ir import l2_normalize
 from infrastructure.encoders.base import SharedSbertBase
@@ -15,13 +15,14 @@ class StatisticalPipelineEncoder:
     text
     → tokenizer BERT
     → SentenceTransformer embedding (384-dim)
-    → PCA dimensionality reduction (→ pca_intermediate_dim)
-    → TruncatedSVD (→ vector_dim)
+    → PCA dimensionality reduction (→ pca_intermediate_dim = vector_dim = 64)
+    → TruncatedSVD (→ vector_dim = 64)
     → L2 normalization
     → stored in pgvector (statistical_vector column)
 
-    PCA centers the embedding space; TruncatedSVD further factorizes the centered
-    embedding matrix into a lower-dimensional representation without re-centering.
+    PCA centers the embedding space (384 → 64); TruncatedSVD further factorizes
+    the centered embedding matrix into a lower-dimensional representation without
+    re-centering. Both stages output the same vector_dim (64), so svd_input_dim=64.
     This two-stage linear transformation is the distinguishing characteristic of
     this pipeline relative to the classical (PCA only) baseline.
 
@@ -32,7 +33,7 @@ class StatisticalPipelineEncoder:
         self,
         base: SharedSbertBase,
         dim: int = 64,
-        pca_intermediate_dim: int = 128,
+        pca_intermediate_dim: int = 64,
         seed: int = 42,
     ) -> None:
         self.base = base
@@ -61,6 +62,7 @@ class StatisticalPipelineEncoder:
             pca_intermediate_dim=self.pca_intermediate_dim,
             pca_explained_variance_ratio=round(pca_explained, 4),
         )
+        category_log("PCA", input_dim=raw_embeddings.shape[1], output_dim=self.pca_intermediate_dim, pipeline="statistical")
 
         # Step 2: TruncatedSVD on PCA-transformed data for final factorization
         self._svd = TruncatedSVD(n_components=self.dim, random_state=self.seed)
@@ -105,6 +107,8 @@ class StatisticalPipelineEncoder:
             svd_dim=self.dim,
             vector=preview_vector(result),
         )
+        category_log("PIPELINE statistical", base_vector_dim=self.pca_intermediate_dim, svd_input_dim=self.pca_intermediate_dim, svd_output_dim=self.dim)
+        category_log("NORMALIZE", vector_norm=1.0)
         return result
 
     def save_state(self, path: str) -> None:
