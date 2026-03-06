@@ -49,3 +49,7 @@ frontend/.vite/deps_temp_c1250a24/package.json
 core/data/beir/**/corpus.jsonl
 core/data/beir/**/queries.jsonl
 core/data/beir/**/qrels/*.tsv
+
+# Claude
+.claude
+CLAUDE.md

@@ -1,18 +1,19 @@
-Documentacao Tecnica - Quantum Search (estado atual do codigo)
+# Documentacao Tecnica - Quantum Search (estado atual do codigo)
 
 ## Objetivo
 
-Comparar retrieval semantico em dois pipelines no mesmo dataset:
+Comparar retrieval semantico em tres pipelines no mesmo dataset:
 
-- Classico (`SbertEncoder` + cosseno em `embedding_vector`)
-- Quantico-inspirado (`PennyLaneQuantumEncoder` + cosseno em `quantum_vector`)
+- **Classico** (`ClassicalPipelineEncoder` + cosseno em `embedding_vector`)
+- **Quantico-inspirado** (`QuantumPipelineEncoder` + cosseno em `quantum_vector`)
+- **Estatistico** (`StatisticalPipelineEncoder` + cosseno em `statistical_vector`)
 
 O sistema tambem inclui:
 
 - autenticacao JWT com refresh token
 - chats persistidos (sem LLM; mensagens do assistant sao resumos/payloads de retrieval)
 - cadastro de ground truth
-- avaliacao batch com metricas de IR
+- avaliacao batch com metricas IR padrao via `ir_measures`
 
 ## Arquitetura (aderente ao projeto)
 
@@ -25,13 +26,14 @@ O sistema tambem inclui:
 
 ### Servicos em runtime
 
-- `core`: FastAPI + Uvicorn
-- `frontend`: Vite
-- `db`: PostgreSQL com imagem `pgvector/pgvector:pg16`
+- `core`: FastAPI + Uvicorn (porta 8000)
+- `frontend`: Vite (porta 5173)
+- `db`: PostgreSQL com imagem `pgvector/pgvector:pg16` (porta 5432)
 
 ### Persistencia vetorial
 
-- PostgreSQL + pgvector via `VectorType` e `cosine_distance`
+- PostgreSQL + pgvector via `VectorType` e operador `cosine_distance`
+- Tres colunas vetoriais em `documents`: `embedding_vector vector(64)`, `quantum_vector vector(64)`, `statistical_vector vector(64)`
 
 ## Fluxo ponta a ponta
 
@@ -50,18 +52,18 @@ Caso de uso: `IndexDatasetUseCase`
 Passos reais:
 
 1. Busca metadados do dataset no provider
-2. Itera documentos do corpus BEIR local
-3. Gera `embedding_vector` com `SbertEncoder.encode(text)`
-4. Gera `quantum_vector` com `PennyLaneQuantumEncoder.encode(text)`
-5. Faz upsert em `documents` em lotes de 64
-6. Persiste `queries` e `qrels` (split `test`) no banco
-7. Persiste snapshot em `dataset_snapshots` (doc_ids, queries, metadados)
+2. **Passo 1**: Itera documentos do corpus, coleta textos
+3. **Fit**: Encode em lote via `SharedSbertBase` (SBERT) → ajusta `ClassicalPipelineEncoder`, `QuantumPipelineEncoder` (3 PCAs + passo do circuito) e `StatisticalPipelineEncoder` (PCA + SVD)
+4. **Passo 2**: Transforma cada documento com os tres encoders → upsert em `documents` em lotes de 64
+5. Persiste `queries` e `qrels` (split `test`) no banco
+6. Persiste snapshot em `dataset_snapshots` (doc_ids, queries, metadados)
 
 Observacoes:
 
 - `POST /api/index` executa indexacao sincrona
-- O frontend atual usa a rota compativel `POST /search/dataset/index`, que dispara job em thread + polling em `/search/dataset/index/status`
-- O job assyncrono pode pular reindexacao se snapshot e contagem de docs coincidirem (`already_indexed`)
+- O frontend usa a rota compativel `POST /search/dataset/index`, que dispara job em thread + polling em `/search/dataset/index/status`
+- O job assincrono pode pular reindexacao (`already_indexed`) apenas se snapshot, contagem de docs **e** encoders fitted coincidirem — sem encoders fitted, reindexacao e obrigatoria
+- Apos o fit, o estado dos encoders e salvo em disco (`core/data/encoder_state/`) para sobreviver a reinicializacoes do container
 
 ### 3) Busca
 
@@ -71,27 +73,28 @@ Modos suportados:
 
 - `classical`
 - `quantum`
+- `statistical`
 - `compare`
 
-Pipeline classico:
-
-1. Encode da query com `SbertEncoder`
+**Pipeline classico**:
+1. Encode da query com `ClassicalPipelineEncoder`
 2. Busca em `documents.embedding_vector`
-3. Score por similaridade cosseno
-4. Ordenacao descrescente por score
+3. Score por similaridade cosseno, ordenacao descrescente
 
-Pipeline quantico-inspirado:
-
-1. Encode da query com `PennyLaneQuantumEncoder`
+**Pipeline quantico-inspirado**:
+1. Encode da query com `QuantumPipelineEncoder`
 2. Busca em `documents.quantum_vector`
-3. Score por similaridade cosseno
-4. Ordenacao descrescente por score
+3. Score por similaridade cosseno, ordenacao descrescente
 
-Modo `compare` retorna tambem:
+**Pipeline estatistico**:
+1. Encode da query com `StatisticalPipelineEncoder`
+2. Busca em `documents.statistical_vector`
+3. Score por similaridade cosseno, ordenacao descrescente
 
-- `comparison.classical`
-- `comparison.quantum`
-- `comparison_metrics` com sobreposicao de `common_doc_ids` no top-k
+**Modo `compare`** retorna tambem:
+
+- `comparison.classical`, `comparison.quantum`, `comparison.statistical`
+- `comparison_metrics` com sobreposicao entre os tres top-k (intersecoes por pares e total)
 
 ### 4) Chat persistido
 
@@ -100,7 +103,7 @@ Fluxo usado pelo frontend (`frontend/src/pages/Chat.tsx`):
 1. Cria conversa (se ainda nao houver uma ativa)
 2. Salva mensagem do usuario
 3. Garante indexacao do dataset `beir/trec-covid` (com polling)
-4. Executa busca comparativa
+4. Executa busca comparativa nos tres pipelines
 5. Salva mensagem `assistant` textual resumindo resultados
 6. Armazena ultima resposta completa em `localStorage` para renderizar os paineis
 
@@ -138,22 +141,15 @@ Fluxo:
 
 1. Le gabaritos do dataset a partir de `queries` + `qrels`
 2. Executa busca por `query_text` no(s) pipeline(s)
-3. Calcula metricas por query
+3. Calcula metricas por query via `IrMeasuresAdapter`
 4. Agrega medias por pipeline
 
-Metricas realmente calculadas hoje:
+Metricas calculadas (via biblioteca `ir_measures`):
 
-- `precision_at_k`
-- `recall_at_k`
-- `ndcg_at_k`
-- `spearman`
-
-Campos existentes nas respostas de busca (`metrics`) mas ainda nao implementados como metrica real:
-
-- `accuracy_at_k` -> `null`
-- `f1_at_k` -> `null`
-- `mrr` -> `null`
-- `answer_similarity` -> `null`
+- `nDCG@k` — Normalized Discounted Cumulative Gain
+- `Recall@k`
+- `MRR@k` — Mean Reciprocal Rank
+- `P@k` — Precision at k
 
 ## API (resumo de operacao)
 
@@ -184,17 +180,17 @@ Campos existentes nas respostas de busca (`metrics`) mas ainda nao implementados
 - `/datasets*`
 - `/benchmarks/labels*`
 
-Rota descontinuada mantida apenas para compatibilidade de erro:
+Rota descontinuada mantida apenas para retorno de erro:
 
-- `POST /search/file` -> `410 Gone`
+- `POST /search/file` → `410 Gone`
 
 ## Seguranca
 
-- Senhas com `passlib` (`bcrypt_sha256`/`bcrypt`)
+- Senhas com `passlib` (`bcrypt`)
 - JWT access + refresh com `python-jose`
 - `OAuth2PasswordBearer` no FastAPI
 - Chats, indexacao e busca exigem usuario autenticado
-- `require_admin_for_indexing` pode exigir admin na indexacao
+- `REQUIRE_ADMIN_FOR_INDEXING` pode exigir admin na indexacao
 
 ## Configuracao (variaveis reais do backend)
 
@@ -202,40 +198,36 @@ Arquivo: `core/src/infrastructure/config.py`
 
 ### Aplicacao
 
-- `APP_ENV`
-- `APP_NAME`
-- `CORS_ORIGINS`
+- `APP_ENV` (default: `dev`)
+- `APP_NAME` (default: `quantum-semantic-search`)
+- `CORS_ORIGINS` (default: `["http://localhost:5173"]`)
 
 ### Banco
 
-- `DB_SCHEME`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_NAME`
-- `DB_USER`
-- `DB_PASSWORD`
+- `DB_SCHEME`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
 - `DATABASE_URL` (override opcional)
 
 ### Auth/JWT
 
-- `JWT_SECRET`
-- `JWT_ALGORITHM`
-- `ACCESS_TOKEN_EXPIRE_MINUTES`
-- `REFRESH_TOKEN_EXPIRE_MINUTES`
-- `PASSWORD_RESET_EXPIRE_MINUTES`
+- `JWT_SECRET` (deve ser trocado em producao)
+- `JWT_ALGORITHM` (default: `HS256`)
+- `ACCESS_TOKEN_EXPIRE_MINUTES` (default: `30`)
+- `REFRESH_TOKEN_EXPIRE_MINUTES` (default: `10080` = 7 dias)
+- `PASSWORD_RESET_EXPIRE_MINUTES` (default: `30`)
 
 ### Retrieval / encoders
 
-- `EMBEDDING_DIM` (default `384`)
-- `QUANTUM_DIM` (default `16`)
-- `QUANTUM_N_QUBITS` (default `4`)
-- `CLASSICAL_MODEL_NAME`
-- `SEED`
+- `CLASSICAL_MODEL_NAME` (default: `sentence-transformers/all-MiniLM-L6-v2`)
+- `VECTOR_DIM` (default: `64`) — dimensao final dos tres pipelines
+- `QUANTUM_N_QUBITS` (default: `6`) — invariante: `2^QUANTUM_N_QUBITS == VECTOR_DIM`
+- `PCA_INTERMEDIATE_DIM` (default: `128`) — dim intermediaria do pipeline estatistico
+- `SEED` (default: `42`) — semente para PCAs, SVD e pesos do circuito
+- `ENCODER_STATE_DIR` (default: `/app/data/encoder_state`) — diretorio onde o estado fitted dos encoders e persistido em disco
 
 ### Controle de acesso
 
-- `REQUIRE_AUTH_FOR_INDEXING`
-- `REQUIRE_ADMIN_FOR_INDEXING`
+- `REQUIRE_AUTH_FOR_INDEXING` (default: `true`)
+- `REQUIRE_ADMIN_FOR_INDEXING` (default: `false`)
 
 ### Frontend
 
@@ -249,7 +241,7 @@ Tabelas principais:
 - `password_resets`
 - `chats`
 - `chat_messages`
-- `documents`
+- `documents` (com tres colunas vetoriais: `embedding_vector vector(64)`, `quantum_vector vector(64)`, `statistical_vector vector(64)`)
 - `queries`
 - `qrels`
 - `dataset_snapshots`
@@ -259,14 +251,14 @@ Detalhes em `DB_SCHEMA.md`.
 ## Limitacoes atuais
 
 - `ideal_answer` nao participa da avaliacao no backend atual
-- `answer_similarity`, `mrr`, `f1_at_k`, `accuracy_at_k` ainda retornam `null`
-- Custo de indexacao pode ser alto em datasets BEIR grandes (sBERT local + corpus inteiro)
-- Pipeline quantico e quantico-inspirado em simulacao (PennyLane), nao hardware quantico real
+- Pipeline quantico e simulado (PennyLane `default.qubit`), nao hardware quantico real
+- A primeira indexacao pode ser demorada em datasets BEIR grandes (SBERT + dois passos sobre o corpus inteiro); reindexacoes subsequentes apos restart sao evitadas pelo estado persistido em disco
+- Dataset BEIR deve ser colocado manualmente em `core/data/beir/` (sem download automatico)
 
 ## Referencias de implementacao
 
 - Busca e avaliacao: `core/src/application/ir_use_cases.py`
-- Metricas: `core/src/infrastructure/metrics/sklearn_metrics.py`
-- Encoders: `core/src/infrastructure/encoders/classical.py`, `core/src/infrastructure/encoders/quantum.py`
+- Metricas: `core/src/infrastructure/metrics/ir_measures_adapter.py`
+- Encoders: `core/src/infrastructure/encoders/base.py`, `classical.py`, `quantum.py`, `statistical.py`
 - Rotas: `core/src/infrastructure/api/routers/api_router.py`
 - Frontend API client: `frontend/src/lib/api.ts`

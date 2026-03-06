@@ -30,12 +30,12 @@ from infrastructure.api.schemas import (
     TokenOut,
     UserOut,
 )
-from infrastructure.metrics.sklearn_metrics import SklearnMetricsAdapter
+from infrastructure.metrics.ir_measures_adapter import IrMeasuresAdapter
 
 
 router = APIRouter(prefix="/api")
 compat_router = APIRouter()
-_metrics_adapter = SklearnMetricsAdapter()
+_metrics_adapter = IrMeasuresAdapter()
 
 
 def _serialize_dt(value: Any) -> str | None:
@@ -95,7 +95,7 @@ def _enrich_metrics(existing: dict | None, evaluated, k: int) -> dict:
     merged["precision_at_k"] = evaluated.precision_at_k
     merged["recall_at_k"] = evaluated.recall_at_k
     merged["ndcg_at_k"] = evaluated.ndcg_at_k
-    merged["spearman"] = evaluated.spearman
+    merged["mrr"] = evaluated.mrr
     merged["k"] = k
     merged["has_labels"] = True
     merged["ground_truth_query_id"] = evaluated.query_id
@@ -114,30 +114,25 @@ def _attach_ir_metrics(
     if not gt:
         return
     if "comparison" in output:
-        classical_results = output["comparison"]["classical"]["results"] or []
-        quantum_results = output["comparison"]["quantum"]["results"] or []
-        classical_eval = _metrics_adapter.evaluate_query(
-            query_id=gt.query_id,
-            query_text=gt.query_text,
-            pipeline="classical",
-            retrieved_doc_ids=[item["doc_id"] for item in classical_results],
-            retrieved_scores=[float(item["score"]) for item in classical_results],
-            relevant_doc_ids=gt.relevant_doc_ids,
-            k=k,
-        )
-        quantum_eval = _metrics_adapter.evaluate_query(
-            query_id=gt.query_id,
-            query_text=gt.query_text,
-            pipeline="quantum",
-            retrieved_doc_ids=[item["doc_id"] for item in quantum_results],
-            retrieved_scores=[float(item["score"]) for item in quantum_results],
-            relevant_doc_ids=gt.relevant_doc_ids,
-            k=k,
-        )
-        output["comparison"]["classical"]["metrics"] = _enrich_metrics(output["comparison"]["classical"].get("metrics"), classical_eval, k)
-        output["comparison"]["quantum"]["metrics"] = _enrich_metrics(output["comparison"]["quantum"].get("metrics"), quantum_eval, k)
+        for pipeline_key in ("classical", "quantum", "statistical"):
+            pipeline_data = output["comparison"].get(pipeline_key)
+            if not pipeline_data:
+                continue
+            pipeline_results = pipeline_data.get("results") or []
+            pipeline_eval = _metrics_adapter.evaluate_query(
+                query_id=gt.query_id,
+                query_text=gt.query_text,
+                pipeline=pipeline_key,
+                retrieved_doc_ids=[item["doc_id"] for item in pipeline_results],
+                retrieved_scores=[float(item["score"]) for item in pipeline_results],
+                relevant_doc_ids=gt.relevant_doc_ids,
+                k=k,
+            )
+            output["comparison"][pipeline_key]["metrics"] = _enrich_metrics(
+                pipeline_data.get("metrics"), pipeline_eval, k
+            )
         return
-    if output.get("mode") in {"classical", "quantum"}:
+    if output.get("mode") in {"classical", "quantum", "statistical"}:
         results = output.get("results") or []
         eval_result = _metrics_adapter.evaluate_query(
             query_id=gt.query_id,
@@ -330,7 +325,12 @@ def compat_index_dataset_status(dataset_id: str, services: Services = Depends(ge
     if state.status == "idle":
         snapshot = services.dataset_snapshots.get(dataset_id)
         docs_count = services.documents.count_by_dataset(dataset_id)
-        if snapshot and docs_count > 0 and snapshot.document_count == docs_count:
+        encoders_fitted = (
+            services.index_dataset.classical_encoder.is_fitted
+            and services.index_dataset.quantum_encoder.is_fitted
+            and services.index_dataset.statistical_encoder.is_fitted
+        )
+        if snapshot and docs_count > 0 and snapshot.document_count == docs_count and encoders_fitted:
             audit_print("api.index.status.completed_from_snapshot", dataset_id=dataset_id, docs_count=docs_count)
             return {
                 "dataset_id": dataset_id,
@@ -375,18 +375,16 @@ def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Se
     if result.get("algorithm_details") is not None:
         output["algorithm_details"] = result["algorithm_details"]
     if "comparison" in result:
-        output["comparison"] = {
-            "classical": {
-                "results": _serialize_results(result["comparison"]["classical"]["results"]),
-                "metrics": result["comparison"]["classical"].get("metrics"),
-                "algorithm_details": result["comparison"]["classical"].get("algorithm_details"),
-            },
-            "quantum": {
-                "results": _serialize_results(result["comparison"]["quantum"]["results"]),
-                "metrics": result["comparison"]["quantum"].get("metrics"),
-                "algorithm_details": result["comparison"]["quantum"].get("algorithm_details"),
-            },
-        }
+        serialized_comparison: dict[str, Any] = {}
+        for pipeline_key in ("classical", "quantum", "statistical"):
+            pipeline_data = result["comparison"].get(pipeline_key)
+            if pipeline_data is not None:
+                serialized_comparison[pipeline_key] = {
+                    "results": _serialize_results(pipeline_data["results"]),
+                    "metrics": pipeline_data.get("metrics"),
+                    "algorithm_details": pipeline_data.get("algorithm_details"),
+                }
+        output["comparison"] = serialized_comparison
     if result.get("comparison_metrics") is not None:
         output["comparison_metrics"] = result["comparison_metrics"]
     _attach_ir_metrics(output, services, payload.dataset_id, payload.query_id, payload.query, payload.top_k)
@@ -550,7 +548,7 @@ def upsert_benchmark_label(payload: BenchmarkLabelInput, user_id: int = Depends(
     relevant = payload.relevant_doc_ids or []
     if not relevant:
         candidate = services.search.execute(payload.dataset_id, payload.query_text, "classical", 5)
-        relevant = [r.doc_id for r in candidate["results"]]
+        relevant = [r.doc_id for r in (candidate.get("results") or [])]
     if not relevant:
         raise HTTPException(status_code=400, detail="Nao achou relevancia na pergunta.")
     item = services.upsert_ground_truth.execute(

@@ -1,229 +1,145 @@
 # Methods
 
-## Pipeline 1 - Classico (sBERT)
+Este arquivo descreve as especificacoes reais dos tres pipelines de vetorizacao, o calculo de similaridade e as metricas de avaliacao IR implementadas no codigo atual.
 
-- Encoder: `SbertEncoder` (`core/src/infrastructure/encoders/classical.py`)
-- Funcao unica: `encode(text)` usada para documentos e queries
-- Saida: vetor real denso
-- Normalizacao: L2 explicita
+## Modelo base compartilhado
 
-## Pipeline 2 - Quantico-inspirado (PennyLane)
+Arquivo: `core/src/infrastructure/encoders/base.py` (`SharedSbertBase`)
 
-- Encoder: `PennyLaneQuantumEncoder` (`core/src/infrastructure/encoders/quantum.py`)
-- Funcao unica: `encode(text)` usada para documentos e queries
-- Nao usa embeddings sBERT
+- Modelo: `sentence-transformers/all-MiniLM-L6-v2` (configuravel via `CLASSICAL_MODEL_NAME`)
+- Dimensao de saida bruta: 384
+- `normalize_embeddings=False`: normalizacao L2 e delegada a cada pipeline
+- Instancia unica cacheada globalmente (`_MODEL_CACHE`)
 
-### Especificacao atual
+## Pipeline 1 - Classico
 
-- `n_qubits`: configuravel (default `4`)
-- Dimensao da saida: `2 ** n_qubits` (default `16`)
-- Mapeamento texto -> parametros:
-  - hash SHA-256 por token
-  - agregacao deterministica em angulos
-- Circuito:
-  - `AngleEmbedding` (Y)
-  - cadeia de `CNOT`
-  - `RZ` por qubit
-  - medicao de probabilidades (`qml.probs`)
-- Vetor final:
-  - probabilidades reais `float32`
-  - L2-normalizado
+Arquivo: `core/src/infrastructure/encoders/classical.py` (`ClassicalPipelineEncoder`)
 
-## Similaridade / Score
+```
+SBERT(384) → PCA(n=64, random_state=seed) → L2 normalize → dim=64
+```
 
-- Vetores L2-normalizados
-- Similaridade alvo no banco: cosseno via pgvector (`cosine_distance`)
-- `score = 1 - cosine_distance`
+- PCA ajustada sobre os embeddings brutos do corpus (fit unico na indexacao)
+- Resultado armazenado em `documents.embedding_vector vector(64)`
 
-## Metricas (implementacao)
+## Pipeline 2 - Quantico-inspirado (Residual Quantum Feature Map)
 
-- `precision@k` e `recall@k`: `sklearn.metrics.precision_score` / `recall_score`
-  - construcao de vetores binarios sobre a uniao `top-k recuperado U relevantes`
-- `ndcg@k`: `sklearn.metrics.ndcg_score` (ganho binario)
-- `spearman`: `scipy.stats.spearmanr`
+Arquivo: `core/src/infrastructure/encoders/quantum.py` (`QuantumPipelineEncoder`)
 
-Observacao:
+```
+SBERT(384)
+  → PCA_base(n=64)            → base_vector_64
+  → PCA_angles(n=6)           → 6 angulos
+  → normalize_angles([0, π])  → angulos_norm
+  → AngleEmbedding(Y) + StronglyEntanglingLayers(2 camadas, 6 qubits)
+  → qml.probs(wires=[0..5])   → probs_64 (2^6 = 64)
+  → sqrt(probs_64)            → quantum_vector_64  [transformacao Hellinger]
+  → concat(base_64, quantum_64) → vector_128
+  → PCA_final(n=64)           → L2 normalize → dim=64
+```
 
-- metricas de IR canonicas sao calculadas no fluxo de avaliacao batch com `ground_truth`
-- no chat, a comparacao usa principalmente latencia e inspecao dos rankings recuperados
+**Detalhes do circuito** (`default.qubit`, PennyLane):
+- 6 qubits (`QUANTUM_N_QUBITS=6`), 2 camadas `StronglyEntanglingLayers`
+- Pesos do circuito fixos por semente (`SEED=42`), nao treinados
+- Invariante: `2 ** QUANTUM_N_QUBITS == VECTOR_DIM` (enforced em `config.py`)
 
-## Reprodutibilidade
+**Tres PCAs ajustadas sequencialmente durante indexacao**:
+1. `PCA_base(64)` sobre embeddings brutos do corpus
+2. `PCA_angles(6)` sobre os vetores base (normaliza angulos ao range [0, π] por min/max por componente)
+3. `PCA_final(64)` sobre os vetores concatenados de 128 dimensoes
 
-- `encode_quantum` deterministico
-- Sem amostragem aleatoria
-- Hashes e mapeamento fixos
+**Transformacao Hellinger**: `sqrt(abs(probs))` — mantem a geometria de distribuicao de probabilidades
 
-## Formulas e Calculos (Algoritmos e Metricas)
+Resultado armazenado em `documents.quantum_vector vector(64)`
 
-Este arquivo descreve as formulas realmente usadas no codigo atual para encoding, score e metricas.
+## Pipeline 3 - Estatistico
 
-## 1. Normalizacao L2
+Arquivo: `core/src/infrastructure/encoders/statistical.py` (`StatisticalPipelineEncoder`)
 
-Arquivo: `core/src/domain/ir.py`
+```
+SBERT(384)
+  → PCA(n=128, random_state=seed)          → intermediate_128
+  → TruncatedSVD(n=64, random_state=seed) → L2 normalize → dim=64
+```
+
+- Fatoracao linear em dois estagios: PCA centraliza o espaco, TruncatedSVD fatoriza ainda mais
+- Ambas as transformacoes ajustadas sobre o corpus na indexacao
+
+Resultado armazenado em `documents.statistical_vector vector(64)`
+
+## Normalizacao L2
+
+Arquivo: `core/src/domain/ir.py` (`l2_normalize`)
 
 Para um vetor `v = [v1, v2, ..., vn]`:
 
 - Norma L2: `||v||2 = sqrt(sum(vi^2))`
 - Vetor normalizado: `v_hat = v / ||v||2`
 
-Caso especial:
+Caso especial: se `||v||2 = 0`, retorna vetor de zeros com o mesmo tamanho.
 
-- Se `||v||2 = 0`, o codigo retorna vetor de zeros com o mesmo tamanho.
+Todos os tres pipelines aplicam `l2_normalize` como etapa final antes do armazenamento e na busca.
 
-## 2. Similaridade / score de busca
-
-### 2.1 Em PostgreSQL + pgvector
+## Similaridade / Score de busca
 
 Arquivo: `core/src/infrastructure/repositories/sqlalchemy_repositories.py`
 
-O banco ordena por `cosine_distance` e o backend expoe:
+- Banco ordena por `cosine_distance` (pgvector)
+- Score exposto pela API: `score = 1 - cosine_distance(query_vector, doc_vector)`
+- Vetores L2-normalizados → cosine_distance equivale a similaridade cosseno direta
 
-- `score = 1 - cosine_distance(query_vector, doc_vector)`
-
-## 3. Encoder classico (sBERT)
-
-Arquivo: `core/src/infrastructure/encoders/classical.py`
-
-Pipeline:
-
-1. `SentenceTransformer(model_name)`
-2. `model.encode(text, convert_to_numpy=True, normalize_embeddings=True)`
-3. Conversao para `list[float]`
-4. Normalizacao L2 adicional via `l2_normalize(...)`
-
-Resultado:
-
-- Vetor denso em `embedding_vector`
-- Dimensao esperada pelo schema atual: `384` (`all-MiniLM-L6-v2`)
-
-## 4. Encoder quantico-inspirado (PennyLane)
-
-Arquivo: `core/src/infrastructure/encoders/quantum.py`
-
-### 4.1 Texto -> angulos
-
-Para cada token `t`:
-
-1. `digest = SHA256(t)`
-2. Para cada qubit `i` (`0` ate `n_qubits-1`), acumula:
-
-`angle_i += (digest[i] / 255) * pi`
-
-`angle_i += ((digest[i + n_qubits] / 255) - 0.5) * 0.25`
-
-Ao final:
-
-- `angle_i = angle_i mod (2*pi)`
-
-### 4.2 Circuito
-
-Com `n_qubits` (default `4`):
-
-1. `AngleEmbedding(angles, rotation='Y')`
-2. Cadeia de `CNOT` entre qubits vizinhos
-3. `RZ(angle_i / 2)` em cada qubit
-4. Medicao `qml.probs(...)`
-
-### 4.3 Vetor final
-
-- Saida bruta: probabilidades da base computacional
-- Dimensao: `2^n_qubits` (default `16`)
-- Conversao para `float32`
-- Normalizacao L2 final
-
-## 5. Busca em modo compare (comparacao entre pipelines)
-
-Arquivo: `core/src/application/ir_use_cases.py` (`_compare_rankings`)
-
-Sejam:
-
-- `Ck` = `doc_ids` do top-k classico
-- `Qk` = `doc_ids` do top-k quantico
-
-### 5.1 `common_doc_ids`
-
-- `common_doc_ids = intersecao(Ck, Qk)` (lista ordenada dos ids em comum no top-k)
-
-## 6. Metricas de avaliacao batch (IR)
-
-Arquivo: `core/src/infrastructure/metrics/sklearn_metrics.py`
-
-Sejam:
-
-- `topk_retrieved = retrieved_doc_ids[:k]`
-- `relevant_set = set(relevant_doc_ids)`
-- `U = uniao(topk_retrieved, relevant_set)` (ordem preservada)
-
-### 6.1 Vetores binarios para precision/recall
-
-Para cada `doc` em `U`:
-
-- `y_true(doc) = 1` se `doc in relevant_set`, senao `0`
-- `y_pred(doc) = 1` se `doc in topk_retrieved`, senao `0`
-
-O codigo aplica:
-
-- `precision_score(y_true_cls, y_pred_cls, zero_division=0)`
-- `recall_score(y_true_cls, y_pred_cls, zero_division=0)`
-
-Observacao:
-
-- Isso equivale ao calculo sobre o conjunto efetivamente recuperado.
-- Se vierem menos de `k` resultados, a precisao nao usa denominador `k` fixo.
-
-### 6.2 NDCG@k (ganho binario)
-
-- `y_true`: relevancia binaria para os docs do `topk_retrieved`
-- `y_score`: scores dos docs recuperados
-- Se tamanho < `k`, o codigo faz `pad` com zeros
-- Formula calculada pela lib: `ndcg_score(y_true, y_score, k=k)`
-
-### 6.3 Spearman top-k com rank padrao para ausentes
-
-Sejam:
-
-- `retrieved_ref = retrieved_doc_ids[:k]`
-- `reference_ref = relevant_doc_ids[:k]`
-- `union_ids = uniao(retrieved_ref, reference_ref)`
-- `default_rank = k + 1`
-
-Ranks usados:
-
-- `r_rank(doc)` = posicao em `retrieved_ref` (1-based), ou `k+1` se ausente
-- `g_rank(doc)` = posicao em `reference_ref` (1-based), ou `k+1` se ausente
-
-O codigo calcula:
-
-- `spearman = scipy.stats.spearmanr(a, b).correlation`
-
-Tratamento de borda:
-
-- Se `len(union_ids) < 2`, retorna `1.0`
-- Se correlacao vier `None` ou `NaN`, retorna `0.0`
-
-## 7. Validacoes de dimensao na inicializacao
-
-Arquivo: `core/src/infrastructure/api/fastapi_app.py`
-
-Ao subir a API, o codigo valida:
-
-- `embedding_dim == 384`
-- `quantum_dim == 2 ** quantum_n_qubits`
-
-Esses valores precisam bater com o schema atual em `documents`:
-
-- `embedding_vector = VectorType(384)`
-- `quantum_vector = VectorType(16)`
-
-## 8. Lote de indexacao
+## Modo compare (comparacao entre pipelines)
 
 Arquivo: `core/src/application/ir_use_cases.py`
 
-A indexacao faz persistencia em lotes de:
+No modo `compare`, os tres pipelines sao executados em paralelo. A resposta inclui:
 
-- `64` documentos por flush/upsert
+- `comparison.classical`, `comparison.quantum`, `comparison.statistical` — top-k de cada pipeline
+- `comparison_metrics`:
+  - `common_doc_ids` — intersecao dos tres top-k
+  - `common_classical_quantum` — intersecao classical ∩ quantum
+  - `common_classical_statistical` — intersecao classical ∩ statistical
+  - `common_quantum_statistical` — intersecao quantum ∩ statistical
 
-Impacto:
+## Metricas de avaliacao IR
 
-- reduz numero de commits
-- atualiza progresso do job de indexacao compativel por lote
+Arquivo: `core/src/infrastructure/metrics/ir_measures_adapter.py` (`IrMeasuresAdapter`)
+
+Metricas calculadas pela biblioteca `ir_measures` (padrao da area, sem implementacao manual):
+
+| Metrica | Descricao |
+|---|---|
+| `nDCG@k` | Normalized Discounted Cumulative Gain at k |
+| `Recall@k` | Fracao dos documentos relevantes recuperados no top-k |
+| `MRR@k` | Mean Reciprocal Rank at k |
+| `P@k` | Precision at k |
+
+**Fluxo de calculo**:
+1. Qrels (ground truth) construidos como `ir_measures.Qrel(query_id, doc_id, relevance=1)` para cada doc relevante
+2. Run (resultados recuperados) construidos como `ir_measures.ScoredDoc(query_id, doc_id, score)`
+3. `ir_measures.calc_aggregate([nDCG@k, R@k, MRR@k, P@k], run, qrels)` calcula tudo de uma vez
+4. Resultados agregados por media em `EvaluateUseCase` (`n = max(len(per_query), 1)`)
+
+**Metricas de busca individuais** (por query no `SearchUseCase`): retornam `None` por padrao e sao preenchidas com valores reais pelo `_attach_ir_metrics()` no api_router quando ground truth existe para aquela query.
+
+## Persistencia de estado dos encoders
+
+Arquivos: `core/src/infrastructure/encoders/{classical,quantum,statistical}.py`, `core/src/infrastructure/api/deps.py`
+
+Ao final do fit, cada encoder serializa seu estado (PCAs, SVD, min/max de angulos) em disco via `joblib`:
+
+```
+core/data/encoder_state/
+├─ classical.joblib   # PCA(64) fitted
+├─ quantum.joblib     # PCA_base(64) + PCA_angles(6) + PCA_final(64) + angle_min/max
+└─ statistical.joblib # PCA(128) + TruncatedSVD(64) fitted
+```
+
+Na inicializacao do container, `_get_encoders()` em `deps.py` tenta carregar os arquivos automaticamente. Se presentes, os encoders ficam fitted sem precisar reindexar. O diretorio e configuravel via `ENCODER_STATE_DIR` (default: `/app/data/encoder_state`, que mapeia para `core/data/encoder_state/` no host pelo bind mount `./core:/app`).
+
+## Lote de indexacao
+
+Arquivo: `core/src/application/ir_use_cases.py`
+
+- Persistencia em lotes de 64 documentos por flush/upsert
+- Reduz numero de commits e atualiza progresso do job de indexacao por lote

@@ -9,6 +9,7 @@ from typing import Any
 class Pipeline(str, Enum):
     CLASSICAL = "classical"
     QUANTUM = "quantum"
+    STATISTICAL = "statistical"
     COMPARE = "compare"
 
 
@@ -48,6 +49,7 @@ class Document:
     metadata: dict[str, Any] = field(default_factory=dict)
     embedding_vector: list[float] | None = None
     quantum_vector: list[float] | None = None
+    statistical_vector: list[float] | None = None
 
 
 @dataclass(slots=True)
@@ -74,7 +76,7 @@ class EvaluationResult:
     precision_at_k: float
     recall_at_k: float
     ndcg_at_k: float
-    spearman: float
+    mrr: float
     top_k_doc_ids: list[str]
 
 

@@ -45,9 +45,21 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_minutes: int = 60 * 24 * 7
 
-    embedding_dim: int = 384
-    quantum_dim: int = 16
-    quantum_n_qubits: int = 4
+    # Shared final vector dimensionality for all three pipelines.
+    # Classical:    BERT(384) -> PCA(vector_dim)
+    # Quantum:      BERT(384) -> PCA_base(vector_dim) -> PCA_angles(quantum_n_qubits)
+    #               -> circuit -> probs(2^quantum_n_qubits == vector_dim) -> Hellinger
+    #               -> concat(2*vector_dim) -> PCA_final(vector_dim)
+    # Statistical:  BERT(384) -> PCA(pca_intermediate_dim) -> TruncatedSVD(vector_dim)
+    vector_dim: int = 64
+
+    # Number of qubits for quantum pipeline.
+    # Must satisfy 2^quantum_n_qubits == vector_dim (circuit output dim == final dim).
+    quantum_n_qubits: int = 6  # 2^6 = 64
+
+    # Intermediate PCA dimension for statistical pipeline before TruncatedSVD.
+    pca_intermediate_dim: int = 128
+
     classical_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     seed: int = 42
 
@@ -55,6 +67,10 @@ class Settings(BaseSettings):
 
     require_auth_for_indexing: bool = True
     require_admin_for_indexing: bool = False
+
+    # Directory where fitted encoder state (PCA/SVD) is persisted across restarts.
+    # Inside the container /app maps to ./core on the host (bind mount).
+    encoder_state_dir: str = "/app/data/encoder_state"
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -71,6 +87,11 @@ class Settings(BaseSettings):
             raise ValueError("Only PostgreSQL is supported. Configure DATABASE_URL or DB_* with a postgresql URL.")
         if self.app_env.lower() not in {"dev", "development", "test"} and self.jwt_secret.strip() == "change-me":
             raise ValueError("JWT_SECRET must be configured in non-development environments.")
+        if 2 ** self.quantum_n_qubits != self.vector_dim:
+            raise ValueError(
+                f"quantum_n_qubits={self.quantum_n_qubits} inconsistent with vector_dim={self.vector_dim}. "
+                f"Require 2^quantum_n_qubits == vector_dim."
+            )
 
 
 @lru_cache

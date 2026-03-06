@@ -25,7 +25,7 @@ function MetricCell({
   const percent = metricPercent(value, maxValue);
 
   return (
-    <div className='min-w-[120px]'>
+    <div className='min-w-[100px]'>
       <div className='text-foreground'>{value.toFixed(3)}</div>
       <div className='mt-1 h-1.5 w-full rounded-full bg-muted'>
         <div
@@ -67,29 +67,40 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
   const showComparison = Boolean(comparison);
   const classicalResults = comparison?.classical.results ?? response.results ?? [];
   const quantumResults = comparison?.quantum.results ?? [];
+  const statisticalResults = comparison?.statistical?.results ?? [];
   const classicalMetrics = comparison?.classical.metrics;
   const quantumMetrics = comparison?.quantum.metrics;
-  const hasIrLabels = Boolean(classicalMetrics?.has_labels || quantumMetrics?.has_labels);
+  const statisticalMetrics = comparison?.statistical?.metrics;
+  const hasStatistical = Boolean(comparison?.statistical);
+  const hasIrLabels = Boolean(
+    classicalMetrics?.has_labels || quantumMetrics?.has_labels || statisticalMetrics?.has_labels
+  );
   const irObservation = hasIrLabels
     ? 'Calculado com gabarito (qrels).'
     : 'Requer gabarito (qrels) para calcular.';
   const metricMax = 1;
 
   return (
-    <div className='w-full max-w-3xl mx-auto px-4 pb-6'>
+    <div className='w-full max-w-4xl mx-auto px-4 pb-6'>
       <div className='rounded-2xl border border-border bg-background/80 p-4 space-y-4'>
         <div className='flex flex-wrap items-center justify-between gap-2'>
           <div>
             <p className='text-sm font-semibold'>Comparação de Busca</p>
-            <p className='text-xs text-muted-foreground'>Objetivo: comparar acurácia e velocidade. Comparação justa: mesmos métodos e mesma análise, mudando apenas a representação vetorial.</p>
+            <p className='text-xs text-muted-foreground'>
+              Objetivo: comparar três transformações vetoriais sobre a mesma base semântica (BERT).
+              Variável experimental: método de transformação do embedding.
+            </p>
           </div>
           <span className='text-xs text-muted-foreground'>Modo: {response.mode}</span>
         </div>
 
         {showComparison ? (
-          <div className='grid gap-3 md:grid-cols-2'>
+          <div className={`grid gap-3 ${hasStatistical ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
             <StepByStep title='Passo a passo: Clássico' details={comparison?.classical.algorithm_details} />
             <StepByStep title='Passo a passo: Quântico' details={comparison?.quantum.algorithm_details} />
+            {hasStatistical && (
+              <StepByStep title='Passo a passo: Estatístico' details={comparison?.statistical?.algorithm_details} />
+            )}
           </div>
         ) : (
           <StepByStep title='Passo a passo' details={response.algorithm_details} />
@@ -105,6 +116,7 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     <th className='py-2 pr-3'>Métrica</th>
                     <th className='py-2 pr-3'>Clássico</th>
                     <th className='py-2 pr-3'>Quântico</th>
+                    {hasStatistical && <th className='py-2 pr-3'>Estatístico</th>}
                     <th className='py-2'>Observação</th>
                   </tr>
                 </thead>
@@ -113,76 +125,74 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     <td className='py-2 pr-3 text-foreground'>Latência (ms)</td>
                     <td className='py-2 pr-3'>{classicalMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>
                     <td className='py-2 pr-3'>{quantumMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>
+                    {hasStatistical && <td className='py-2 pr-3'>{statisticalMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>}
                     <td className='py-2'>Comparativo de custo/tempo (não é qualidade)</td>
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>Docs recuperados</td>
                     <td className='py-2 pr-3'>{classicalResults.length}</td>
                     <td className='py-2 pr-3'>{quantumResults.length}</td>
+                    {hasStatistical && <td className='py-2 pr-3'>{statisticalResults.length}</td>}
                     <td className='py-2'>Top-k retornado por pipeline</td>
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>Precision@k</td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(classicalMetrics?.precision_at_k)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber(classicalMetrics?.precision_at_k)} maxValue={metricMax} />
                     </td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(quantumMetrics?.precision_at_k)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber(quantumMetrics?.precision_at_k)} maxValue={metricMax} />
                     </td>
+                    {hasStatistical && (
+                      <td className='py-2 pr-3'>
+                        <MetricCell value={metricNumber(statisticalMetrics?.precision_at_k)} maxValue={metricMax} />
+                      </td>
+                    )}
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>Recall@k</td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(classicalMetrics?.recall_at_k)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber(classicalMetrics?.recall_at_k)} maxValue={metricMax} />
                     </td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(quantumMetrics?.recall_at_k)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber(quantumMetrics?.recall_at_k)} maxValue={metricMax} />
                     </td>
+                    {hasStatistical && (
+                      <td className='py-2 pr-3'>
+                        <MetricCell value={metricNumber(statisticalMetrics?.recall_at_k)} maxValue={metricMax} />
+                      </td>
+                    )}
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>NDCG@k</td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(classicalMetrics?.ndcg_at_k)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber(classicalMetrics?.ndcg_at_k)} maxValue={metricMax} />
                     </td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(quantumMetrics?.ndcg_at_k)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber(quantumMetrics?.ndcg_at_k)} maxValue={metricMax} />
                     </td>
+                    {hasStatistical && (
+                      <td className='py-2 pr-3'>
+                        <MetricCell value={metricNumber(statisticalMetrics?.ndcg_at_k)} maxValue={metricMax} />
+                      </td>
+                    )}
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
-                    <td className='py-2 pr-3 text-foreground'>Spearman</td>
+                    <td className='py-2 pr-3 text-foreground'>MRR@k</td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(classicalMetrics?.spearman)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber((classicalMetrics as Record<string, unknown>)?.mrr as number | null)} maxValue={metricMax} />
                     </td>
                     <td className='py-2 pr-3'>
-                      <MetricCell
-                        value={metricNumber(quantumMetrics?.spearman)}
-                        maxValue={metricMax}
-                      />
+                      <MetricCell value={metricNumber((quantumMetrics as Record<string, unknown>)?.mrr as number | null)} maxValue={metricMax} />
                     </td>
+                    {hasStatistical && (
+                      <td className='py-2 pr-3'>
+                        <MetricCell value={metricNumber((statisticalMetrics as Record<string, unknown>)?.mrr as number | null)} maxValue={metricMax} />
+                      </td>
+                    )}
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                 </tbody>

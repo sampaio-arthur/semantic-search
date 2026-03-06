@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+import numpy as np
+
 from .entities import Chat, ChatMessage, DatasetSnapshot, Document, EvaluationResult, GroundTruth, SearchResult, User
 
 
@@ -12,6 +14,7 @@ class DocumentRepositoryPort(Protocol):
     def count_by_dataset(self, dataset: str) -> int: ...
     def search_by_embedding(self, dataset: str, query_vector: list[float], top_k: int) -> list[SearchResult]: ...
     def search_by_quantum(self, dataset: str, query_vector: list[float], top_k: int) -> list[SearchResult]: ...
+    def search_by_statistical(self, dataset: str, query_vector: list[float], top_k: int) -> list[SearchResult]: ...
     def list_document_ids(self, dataset: str) -> list[str]: ...
 
 
@@ -72,8 +75,26 @@ class NotificationPort(Protocol):
 
 
 class EncoderPort(Protocol):
+    """Protocol for pipeline encoders.
+
+    All encoders must be fitted on corpus embeddings before encoding queries.
+    Call fit(raw_embeddings) during indexing, then encode(text) for queries.
+    """
+
     dim: int
-    def encode(self, text: str) -> list[float]: ...
+    is_fitted: bool
+
+    def fit(self, raw_embeddings: np.ndarray) -> None:
+        """Fit transformation on corpus raw SBERT embeddings. Shape: [N, base_dim]."""
+        ...
+
+    def transform(self, raw_embedding: np.ndarray) -> list[float]:
+        """Apply pipeline transform to a single raw SBERT embedding. Requires fit()."""
+        ...
+
+    def encode(self, text: str) -> list[float]:
+        """Encode text: base SBERT embedding → pipeline transform → L2 normalize."""
+        ...
 
 
 @dataclass(slots=True)
@@ -84,7 +105,7 @@ class EvaluationAggregate:
     mean_precision_at_k: float
     mean_recall_at_k: float
     mean_ndcg_at_k: float
-    mean_spearman: float
+    mean_mrr: float
 
 
 class MetricsPort(Protocol):

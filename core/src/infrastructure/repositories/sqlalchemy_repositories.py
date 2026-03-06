@@ -179,6 +179,7 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
                 text=preview_text(item.text),
                 embedding=preview_vector(item.embedding_vector),
                 quantum=preview_vector(item.quantum_vector),
+                statistical=preview_vector(item.statistical_vector),
             )
             row = self.session.scalar(select(DocumentModel).where(DocumentModel.dataset == item.dataset, DocumentModel.doc_id == item.doc_id))
             if row is None:
@@ -189,6 +190,7 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
             row.metadata_json = item.metadata
             row.embedding_vector = item.embedding_vector
             row.quantum_vector = item.quantum_vector
+            row.statistical_vector = item.statistical_vector
             count += 1
         self.session.commit()
         audit_print("repository.documents.upsert.completed", batch_size=len(documents), persisted=count)
@@ -205,6 +207,9 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
 
     def search_by_quantum(self, dataset: str, query_vector: list[float], top_k: int) -> list[SearchResult]:
         return self._search(dataset, query_vector, top_k, field="quantum_vector")
+
+    def search_by_statistical(self, dataset: str, query_vector: list[float], top_k: int) -> list[SearchResult]:
+        return self._search(dataset, query_vector, top_k, field="statistical_vector")
 
     def _search(self, dataset: str, query_vector: list[float], top_k: int, field: str) -> list[SearchResult]:
         dialect = self.session.bind.dialect.name if self.session.bind else ""

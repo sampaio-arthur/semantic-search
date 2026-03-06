@@ -1,22 +1,28 @@
-# TCC - Quantum Comparative Retrieval (Classical vs Quantum-Inspired)
+# TCC - Quantum Comparative Retrieval
 
-Aplicacao full-stack para comparar busca semantica em dois tipos de vetorizacao sobre datasets BEIR:
+Aplicacao full-stack para comparar busca semantica em tres pipelines de vetorizacao sobre datasets BEIR:
 
-- Busca semantica classica por embeddings (`sBERT`) em `documents.embedding_vector`
-- Busca semantica por vetorizacao quantica simulada / quantico-inspirada (`PennyLane`) em `documents.quantum_vector`
+| Pipeline | Transformacao | Coluna vetorial | Dim |
+|---|---|---|---|
+| **Classical** | SBERT → PCA(64) → L2 | `embedding_vector` | 64 |
+| **Quantum** | SBERT → PCA_base(64) → PCA_angles(6) → QCircuit(64) → Hellinger → concat(128) → PCA_final(64) → L2 | `quantum_vector` | 64 |
+| **Statistical** | SBERT → PCA(128) → TruncatedSVD(64) → L2 | `statistical_vector` | 64 |
+
+Todos os tres pipelines compartilham o mesmo modelo base (`all-MiniLM-L6-v2`, 384 dim), o mesmo ajuste de PCA (nivel de corpus), o mesmo ranking por similaridade cosseno (pgvector) e as mesmas metricas (ir_measures). A unica variavel experimental e a **transformacao vetorial**.
 
 ## Objetivo do projeto
 
-Implementar e comparar dois fluxos de busca semantica sobre o mesmo dataset e com o mesmo criterio de ranking (similaridade cosseno), mudando a representacao vetorial:
+Implementar e comparar tres fluxos de busca semantica sobre o mesmo dataset e com o mesmo criterio de ranking (similaridade cosseno), variando apenas a representacao vetorial:
 
-- Pipeline classico: texto -> embedding denso real via `sentence-transformers` (`sBERT`)
-- Pipeline quantico-inspirado: texto -> vetor real deterministico derivado de simulacao quantica no `PennyLane` (probabilidades do circuito), sem usar embedding sBERT
+- **Pipeline classico**: SBERT → reducao PCA(64) → L2
+- **Pipeline quantico-inspirado**: SBERT → PCA residual → circuito PennyLane (StronglyEntanglingLayers) → Hellinger → concat → PCA_final → L2
+- **Pipeline estatistico**: SBERT → PCA(128) → TruncatedSVD(64) → L2
 
 Objetivo da comparacao:
 
-- analisar diferencas de retrieval entre representacao por embeddings e representacao quantica-inspirada
+- analisar diferencas de retrieval entre as tres representacoes vetoriais
 - comparar proxies de custo (latencia)
-- permitir avaliacao batch com ground truth (precision/recall/NDCG/Spearman)
+- permitir avaliacao batch com ground truth (nDCG@k, Recall@k, MRR@k, P@k via `ir_measures`)
 
 Inclui:
 
@@ -25,7 +31,7 @@ Inclui:
 - PostgreSQL + pgvector
 - autenticacao JWT
 - chats persistidos
-- cadastro de ground truth e avaliacao batch (precision/recall/NDCG/Spearman)
+- cadastro de ground truth e avaliacao batch com metricas IR padrao
 
 ## Como o `.env.example` deve ser usado
 
@@ -58,9 +64,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_MINUTES=10080
 
 CLASSICAL_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_DIM=384
-QUANTUM_N_QUBITS=4
-QUANTUM_DIM=16
+VECTOR_DIM=64
+QUANTUM_N_QUBITS=6
+PCA_INTERMEDIATE_DIM=128
 SEED=42
 
 PASSWORD_RESET_EXPIRE_MINUTES=30
@@ -71,6 +77,8 @@ REQUIRE_ADMIN_FOR_INDEXING=false
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
+Invariante obrigatoria: `2 ** QUANTUM_N_QUBITS == VECTOR_DIM` (default: `2^6 = 64`).
+
 ## Pre-requisitos
 
 ### Opcao A (recomendada): Docker
@@ -78,13 +86,23 @@ VITE_API_BASE_URL=http://localhost:8000
 - Docker
 - Docker Compose
 
-## Executando com Docker 
+## Executando com Docker
 
 1. Criar e configurar `.env` a partir de `.env.example`
 2. Subir os servicos
 
 ```bash
 docker compose up --build
+```
+
+Ou usando o Makefile:
+
+```bash
+make setup   # build + up
+make up      # so subir
+make logs    # ver logs
+make down    # parar
+make test    # rodar testes no container
 ```
 
 Servicos:
@@ -102,13 +120,14 @@ Servicos:
 5. O frontend vai:
    - criar conversa
    - garantir indexacao do dataset `beir/trec-covid`
-   - executar busca comparativa classico x quantico-inspirado
-   - exibir paineis com latencia e scores
+   - executar busca comparativa nos tres pipelines
+   - exibir paineis com latencia, scores e metricas
 
 Observacoes:
 
-- A primeira indexacao pode demorar (modelo sBERT + indexacao completa do corpus BEIR local)
-- O job de indexacao compativel usa polling em `/search/dataset/index/status`
+- A primeira indexacao pode demorar (modelo SBERT + dois passos de indexacao do corpus BEIR local)
+- O job de indexacao assincrono usa polling em `/search/dataset/index/status`
+- A indexacao e um processo de dois passos: (1) coleta todos os textos e faz o fit dos encoders; (2) transforma e persiste os vetores
 
 ## Dataset (BEIR)
 
@@ -137,6 +156,19 @@ O backend le os arquivos localmente (offline), sem download automatico.
 
 Apos colocar os arquivos no local correto, o backend pode ser iniciado normalmente.
 
+## Testes
+
+```bash
+# Rodar todos os testes dentro do container
+make test
+
+# Ou diretamente
+docker compose exec core pytest
+
+# Um arquivo especifico
+docker compose exec core pytest tests/test_api_flow.py -v
+```
+
 ## Documentacao adicional
 
 - `DOCUMENTACAO.md` (visao tecnica aderente ao codigo)
@@ -148,4 +180,3 @@ Apos colocar os arquivos no local correto, o backend pode ser iniciado normalmen
 ## Duvidas
 
 - email: `arthurbarrasampaio@gmail.com`
-

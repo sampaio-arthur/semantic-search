@@ -10,10 +10,7 @@ from infrastructure.db.session import init_db
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    if settings.embedding_dim != 384:
-        raise RuntimeError("embedding_dim must match documents.embedding_vector dimension (current model column: 384).")
-    if settings.quantum_dim != 2 ** settings.quantum_n_qubits:
-        raise RuntimeError("quantum_dim must match 2**quantum_n_qubits for deterministic quantum encoder.")
+    # vector_dim == 2**quantum_n_qubits is validated in Settings.__init__
     init_db(settings)
 
     app = FastAPI(title=settings.app_name, version="0.1.0")

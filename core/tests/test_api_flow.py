@@ -59,6 +59,7 @@ def test_minimal_required_flow():
     assert payload.get("chat_persisted") is True
     assert payload["comparison"]["classical"]["results"]
     assert payload["comparison"]["quantum"]["results"]
+    assert payload["comparison"]["statistical"]["results"]
 
     chat_detail = client.get(f"/api/chats/{chat_id}", headers=headers)
     assert chat_detail.status_code == 200, chat_detail.text
@@ -80,4 +81,4 @@ def test_minimal_required_flow():
     eval_resp = client.post("/api/evaluate", json={"dataset_id": "beir/trec-covid", "pipeline": "compare", "k": 5}, headers=headers)
     assert eval_resp.status_code == 200, eval_resp.text
     eval_payload = eval_resp.json()
-    assert len(eval_payload["pipelines"]) == 2
+    assert len(eval_payload["pipelines"]) == 3

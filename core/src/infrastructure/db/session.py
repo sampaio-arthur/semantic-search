@@ -36,6 +36,35 @@ def init_db(settings: Settings | None = None) -> None:
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE IF EXISTS documents ADD COLUMN IF NOT EXISTS title TEXT"))
+        # Migrate vector columns to shared 64-dim space and add statistical_vector.
+        # Dropping old columns invalidates existing indexed vectors — re-indexing required.
+        conn.execute(text("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='documents' AND column_name='embedding_vector'
+                ) THEN
+                    ALTER TABLE documents DROP COLUMN embedding_vector;
+                END IF;
+                ALTER TABLE documents ADD COLUMN IF NOT EXISTS embedding_vector vector(64);
+
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='documents' AND column_name='quantum_vector'
+                ) THEN
+                    ALTER TABLE documents DROP COLUMN quantum_vector;
+                END IF;
+                ALTER TABLE documents ADD COLUMN IF NOT EXISTS quantum_vector vector(64);
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='documents' AND column_name='statistical_vector'
+                ) THEN
+                    ALTER TABLE documents ADD COLUMN statistical_vector vector(64);
+                END IF;
+            END $$;
+        """))
         conn.execute(
             text(
                 """

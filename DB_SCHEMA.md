@@ -1,5 +1,11 @@
 # DB Schema
 
+## Banco de dados
+
+PostgreSQL com extensao `pgvector` (`pgvector/pgvector:pg16`).
+
+Todos os tres pipelines armazenam vetores de dimensao 64 (`VECTOR_DIM=64`) em colunas separadas na tabela `documents`.
+
 ## Tabelas
 
 ### `users`
@@ -15,7 +21,7 @@
 ### `password_resets`
 
 - `id`
-- `user_id` (FK -> `users`)
+- `user_id` (FK → `users`)
 - `token_hash`
 - `expires_at`
 - `used_at`
@@ -24,7 +30,7 @@
 ### `chats`
 
 - `id`
-- `user_id` (FK -> `users`)
+- `user_id` (FK → `users`)
 - `title`
 - `created_at`
 - `updated_at`
@@ -33,9 +39,9 @@
 ### `chat_messages`
 
 - `id`
-- `chat_id` (FK -> `chats`)
+- `chat_id` (FK → `chats`)
 - `role` (`user|assistant|system`)
-- `content` (texto; payload JSON serializado é permitido para resultado de retrieval)
+- `content` (texto; payload JSON serializado e permitido para resultado de retrieval)
 - `created_at`
 
 ### `documents`
@@ -46,8 +52,9 @@
 - `title` (opcional)
 - `text`
 - `metadata` (JSON/JSONB)
-- `embedding_vector`
-- `quantum_vector`
+- `embedding_vector vector(64)` — Pipeline classico (SBERT → PCA(64) → L2)
+- `quantum_vector vector(64)` — Pipeline quantico-inspirado (SBERT → PCA_base → circuito → Hellinger → PCA_final → L2)
+- `statistical_vector vector(64)` — Pipeline estatistico (SBERT → PCA(128) → TruncatedSVD(64) → L2)
 
 Constraint:
 
@@ -102,4 +109,8 @@ Constraint:
 
 ## Vetores
 
-- PostgreSQL + pgvector via `VectorType`
+- PostgreSQL + pgvector via `VectorType` (`pgvector.sqlalchemy.Vector`)
+- Todos os vetores tem dimensao 64 (configuravel via `VECTOR_DIM`, default `64`)
+- Busca por similaridade cosseno: `cosine_distance` do pgvector
+- `score = 1 - cosine_distance(query_vector, doc_vector)`
+- Todos os vetores sao L2-normalizados antes do armazenamento

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+import numpy as np
 
 from audit import audit_print, preview_results, preview_text, preview_vector
 from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
@@ -10,11 +13,15 @@ from domain.ports import (
     DatasetProviderPort,
     DatasetSnapshotRepositoryPort,
     DocumentRepositoryPort,
-    EncoderPort,
     EvaluationAggregate,
     GroundTruthRepositoryPort,
     MetricsPort,
 )
+
+if TYPE_CHECKING:
+    from infrastructure.encoders.classical import ClassicalPipelineEncoder
+    from infrastructure.encoders.quantum import QuantumPipelineEncoder
+    from infrastructure.encoders.statistical import StatisticalPipelineEncoder
 
 
 @dataclass(slots=True)
@@ -24,26 +31,37 @@ class SearchPipelineResponse:
 
 
 class IndexDatasetUseCase:
+    """Two-pass indexing:
+    Pass 1 — collect all documents and generate raw SBERT embeddings.
+    Fit — PCA/SVD transformations are fit on the full corpus embeddings.
+    Pass 2 — apply transformations and upsert all three pipeline vectors.
+    """
+
     def __init__(
         self,
         datasets: DatasetProviderPort,
         documents: DocumentRepositoryPort,
-        embedding_encoder: EncoderPort,
-        quantum_encoder: EncoderPort,
+        classical_encoder: "ClassicalPipelineEncoder",
+        quantum_encoder: "QuantumPipelineEncoder",
+        statistical_encoder: "StatisticalPipelineEncoder",
         dataset_snapshots: DatasetSnapshotRepositoryPort | None = None,
         ground_truths: GroundTruthRepositoryPort | None = None,
+        encoder_state_dir: str | None = None,
     ) -> None:
         self.datasets = datasets
         self.documents = documents
-        self.embedding_encoder = embedding_encoder
+        self.classical_encoder = classical_encoder
         self.quantum_encoder = quantum_encoder
+        self.statistical_encoder = statistical_encoder
         self.dataset_snapshots = dataset_snapshots
         self.ground_truths = ground_truths
+        self.encoder_state_dir = encoder_state_dir
 
     def execute(self, dataset_id: str, progress_callback=None) -> dict:
         dataset_meta = self.datasets.get_dataset(dataset_id)
         if not dataset_meta:
             raise NotFoundError("Dataset not found.")
+
         audit_print(
             "index.use_case.start",
             dataset_id=dataset_id,
@@ -51,9 +69,11 @@ class IndexDatasetUseCase:
             document_count_hint=dataset_meta.get("document_count"),
             query_count_hint=dataset_meta.get("query_count"),
         )
-        batch: list[Document] = []
-        document_ids: list[str] = []
-        total = 0
+
+        # ── Pass 1: Collect all document data ─────────────────────────────────
+        doc_infos: list[dict] = []
+        texts: list[str] = []
+
         for item in self.datasets.iter_documents(dataset_id):
             text = item["text"]
             audit_print(
@@ -64,28 +84,90 @@ class IndexDatasetUseCase:
                 text=preview_text(text),
                 metadata_keys=sorted((item.get("metadata") or {}).keys()),
             )
-            embedding_vector = self.embedding_encoder.encode(text)
-            quantum_vector = self.quantum_encoder.encode(text)
+            texts.append(text)
+            doc_infos.append(item)
+
+        audit_print(
+            "index.pass1.completed",
+            dataset_id=dataset_id,
+            total_documents=len(texts),
+        )
+
+        # ── Fit: generate raw SBERT embeddings and fit all transformers ────────
+        audit_print("index.fit.start", dataset_id=dataset_id, n_docs=len(texts))
+        raw_embeddings = self.classical_encoder.base.encode_batch(texts)
+        audit_print(
+            "index.fit.raw_embeddings_ready",
+            dataset_id=dataset_id,
+            shape=list(raw_embeddings.shape),
+        )
+
+        self.classical_encoder.fit(raw_embeddings)
+        audit_print(
+            "index.fit.classical_completed",
+            dataset_id=dataset_id,
+            output_dim=self.classical_encoder.dim,
+        )
+
+        self.quantum_encoder.fit(raw_embeddings)
+        audit_print(
+            "index.fit.quantum_completed",
+            dataset_id=dataset_id,
+            base_pca_dim=self.quantum_encoder.dim,
+            angle_pca_dim=self.quantum_encoder.n_qubits,
+            circuit_output_dim=self.quantum_encoder.circuit_output_dim,
+            final_dim=self.quantum_encoder.dim,
+        )
+
+        self.statistical_encoder.fit(raw_embeddings)
+        audit_print(
+            "index.fit.statistical_completed",
+            dataset_id=dataset_id,
+            pca_intermediate_dim=self.statistical_encoder.pca_intermediate_dim,
+            output_dim=self.statistical_encoder.dim,
+        )
+
+        if self.encoder_state_dir:
+            self.classical_encoder.save_state(f"{self.encoder_state_dir}/classical.joblib")
+            self.quantum_encoder.save_state(f"{self.encoder_state_dir}/quantum.joblib")
+            self.statistical_encoder.save_state(f"{self.encoder_state_dir}/statistical.joblib")
+            audit_print("index.fit.encoder_state_saved", encoder_state_dir=self.encoder_state_dir)
+
+        # ── Pass 2: Apply transformations in batches and upsert ───────────────
+        batch_size = 64
+        batch: list[Document] = []
+        document_ids: list[str] = []
+        total = 0
+
+        for i, (item, raw) in enumerate(zip(doc_infos, raw_embeddings)):
+            embedding_vector = self.classical_encoder.transform(raw)
+            quantum_vector = self.quantum_encoder.transform(raw)
+            statistical_vector = self.statistical_encoder.transform(raw)
+
             audit_print(
                 "index.document.encoded",
                 dataset_id=dataset_id,
                 doc_id=item["doc_id"],
                 embedding=preview_vector(embedding_vector),
                 quantum=preview_vector(quantum_vector),
+                statistical=preview_vector(statistical_vector),
             )
+
             document_ids.append(item["doc_id"])
             batch.append(
                 Document(
                     dataset=dataset_id,
                     doc_id=item["doc_id"],
                     title=item.get("title"),
-                    text=text,
+                    text=item["text"],
                     metadata=item.get("metadata", {}),
                     embedding_vector=embedding_vector,
                     quantum_vector=quantum_vector,
+                    statistical_vector=statistical_vector,
                 )
             )
-            if len(batch) >= 64:
+
+            if len(batch) >= batch_size:
                 audit_print(
                     "index.batch.flush",
                     dataset_id=dataset_id,
@@ -102,6 +184,7 @@ class IndexDatasetUseCase:
                 if progress_callback is not None:
                     progress_callback(total)
                 batch.clear()
+
         if batch:
             audit_print(
                 "index.batch.flush",
@@ -118,6 +201,8 @@ class IndexDatasetUseCase:
             )
             if progress_callback is not None:
                 progress_callback(total)
+
+        # ── Persist queries and qrels ─────────────────────────────────────────
         query_snapshot = []
         qrels_count = 0
         for q in self.datasets.iter_queries(dataset_id):
@@ -149,6 +234,7 @@ class IndexDatasetUseCase:
                     query_text=str(q["query_text"]),
                     qrels=qrels,
                 )
+
         if self.dataset_snapshots is not None:
             subset = dataset_meta.get("subset") or {}
             self.dataset_snapshots.upsert(
@@ -167,11 +253,13 @@ class IndexDatasetUseCase:
                     queries=query_snapshot,
                 )
             )
+
         result = {
             "dataset_id": dataset_id,
             "indexed_count": total,
-            "embedding_dim": self.embedding_encoder.dim,
+            "classical_dim": self.classical_encoder.dim,
             "quantum_dim": self.quantum_encoder.dim,
+            "statistical_dim": self.statistical_encoder.dim,
             "snapshot_document_count": len(document_ids),
             "snapshot_query_count": len(query_snapshot),
             "qrels_count": qrels_count,
@@ -181,95 +269,121 @@ class IndexDatasetUseCase:
 
 
 class SearchUseCase:
-    def __init__(self, documents: DocumentRepositoryPort, embedding_encoder: EncoderPort, quantum_encoder: EncoderPort) -> None:
+    def __init__(
+        self,
+        documents: DocumentRepositoryPort,
+        classical_encoder: "ClassicalPipelineEncoder",
+        quantum_encoder: "QuantumPipelineEncoder",
+        statistical_encoder: "StatisticalPipelineEncoder",
+    ) -> None:
         self.documents = documents
-        self.embedding_encoder = embedding_encoder
+        self.classical_encoder = classical_encoder
         self.quantum_encoder = quantum_encoder
+        self.statistical_encoder = statistical_encoder
 
     def _search_single(self, dataset: str, query: str, pipeline: Pipeline, top_k: int):
         started = time.perf_counter()
+        audit_print(
+            "search.pipeline.start",
+            dataset_id=dataset,
+            pipeline=pipeline.value,
+            top_k=top_k,
+            query=preview_text(query),
+        )
+
         if pipeline == Pipeline.CLASSICAL:
-            audit_print(
-                "search.pipeline.start",
-                dataset_id=dataset,
-                pipeline=pipeline.value,
-                top_k=top_k,
-                query=preview_text(query),
-            )
-            qv = self.embedding_encoder.encode(query)
+            qv = self.classical_encoder.encode(query)
             results = self.documents.search_by_embedding(dataset, qv, top_k)
-            latency_ms = (time.perf_counter() - started) * 1000.0
-            audit_print(
-                "search.pipeline.completed",
-                dataset_id=dataset,
-                pipeline=pipeline.value,
-                latency_ms=round(latency_ms, 3),
-                query_vector=preview_vector(qv),
-                results=preview_results(results),
-            )
-            return results, latency_ms
-        if pipeline == Pipeline.QUANTUM:
-            audit_print(
-                "search.pipeline.start",
-                dataset_id=dataset,
-                pipeline=pipeline.value,
-                top_k=top_k,
-                query=preview_text(query),
-            )
+        elif pipeline == Pipeline.QUANTUM:
             qv = self.quantum_encoder.encode(query)
             results = self.documents.search_by_quantum(dataset, qv, top_k)
-            latency_ms = (time.perf_counter() - started) * 1000.0
-            audit_print(
-                "search.pipeline.completed",
-                dataset_id=dataset,
-                pipeline=pipeline.value,
-                latency_ms=round(latency_ms, 3),
-                query_vector=preview_vector(qv),
-                results=preview_results(results),
-            )
-            return results, latency_ms
-        raise ValidationError("Invalid pipeline.")
+        elif pipeline == Pipeline.STATISTICAL:
+            qv = self.statistical_encoder.encode(query)
+            results = self.documents.search_by_statistical(dataset, qv, top_k)
+        else:
+            raise ValidationError("Invalid pipeline.")
+
+        latency_ms = (time.perf_counter() - started) * 1000.0
+        audit_print(
+            "search.pipeline.completed",
+            dataset_id=dataset,
+            pipeline=pipeline.value,
+            latency_ms=round(latency_ms, 3),
+            query_vector=preview_vector(qv),
+            results=preview_results(results),
+        )
+        return results, latency_ms
 
     def _algorithm_details(self, pipeline: Pipeline) -> dict:
         if pipeline == Pipeline.CLASSICAL:
             return {
-                "algorithm": "classical-sbert-cosine",
+                "algorithm": "classical-sbert-pca-cosine",
                 "comparator": "cosine similarity (score = 1 - cosine_distance)",
                 "candidate_strategy": "full dataset ranking in embedding_vector space",
-                "description": "Query and documents are encoded with the same classical encoder (sBERT), L2-normalized, and ranked by cosine similarity.",
+                "description": "BERT → PCA(64) → L2 normalize → cosine similarity ranking.",
                 "debug": {
                     "vector_space": "embedding_vector",
-                    "encoder": "encode_embedding(text)",
+                    "encoder": "ClassicalPipelineEncoder",
                     "normalization": "L2",
                     "steps": [
                         "Recebe a pergunta em texto",
-                        "Transforma a pergunta em embedding classico (sBERT)",
-                        "Usa o mesmo encoder classico usado na indexacao dos documentos",
-                        "Consulta a coluna embedding_vector no banco",
-                        "Calcula similaridade cosseno e ordena por score",
-                        "Retorna top-k documentos classicos",
+                        "Gera embedding semântico base via SentenceTransformer (384-dim)",
+                        "Reduz dimensionalidade via PCA (384→64)",
+                        "Normaliza com norma L2",
+                        "Consulta a coluna embedding_vector no banco via cosine similarity",
+                        "Retorna top-k documentos ordenados por score",
                     ],
                 },
             }
-        return {
-            "algorithm": "quantum-probability-cosine",
-            "comparator": "cosine similarity (score = 1 - cosine_distance)",
-            "candidate_strategy": "full dataset ranking in quantum_vector space",
-            "description": "Query and documents are encoded with the same deterministic quantum-inspired encoder (PennyLane probabilities), L2-normalized, and ranked by cosine similarity.",
-            "debug": {
-                "vector_space": "quantum_vector",
-                "encoder": "encode_quantum(text)",
-                "normalization": "L2",
-                "steps": [
-                    "Recebe a pergunta em texto",
-                    "Transforma a pergunta em vetor quantico-inspirado deterministico",
-                    "Usa o mesmo encoder quantico usado na indexacao dos documentos",
-                    "Consulta a coluna quantum_vector no banco",
-                    "Calcula similaridade cosseno e ordena por score",
-                    "Retorna top-k documentos quanticos",
-                ],
-            },
-        }
+        if pipeline == Pipeline.QUANTUM:
+            return {
+                "algorithm": "residual-quantum-feature-map-cosine",
+                "comparator": "cosine similarity (score = 1 - cosine_distance)",
+                "candidate_strategy": "full dataset ranking in quantum_vector space",
+                "description": "BERT → PCA_base(64) → PCA_angles(6) → AngleEmbedding + StronglyEntanglingLayers → probs → Hellinger(64) → concat(128) → PCA_final(64) → L2 normalize → cosine similarity ranking.",
+                "debug": {
+                    "vector_space": "quantum_vector",
+                    "encoder": "QuantumPipelineEncoder",
+                    "normalization": "L2",
+                    "steps": [
+                        "Recebe a pergunta em texto",
+                        "Gera embedding semântico base via SentenceTransformer (384-dim)",
+                        "Reduz dimensionalidade via PCA_base (384→64) → base_vector_64",
+                        "Reduz para ângulos via PCA_angles (64→6) e normaliza para [0,π]",
+                        "Codifica ângulos no circuito quântico via AngleEmbedding (6 qubits)",
+                        "Aplica camadas entrelaçadas via StronglyEntanglingLayers",
+                        "Mede probabilidades de estado quântico (2^6 = 64-dim)",
+                        "Aplica transformação de Hellinger: sqrt(probabilidades) → quantum_vector_64",
+                        "Concatena base_vector_64 + quantum_vector_64 → vector_128",
+                        "Reduz via PCA_final (128→64) → final_vector_64",
+                        "Normaliza com norma L2",
+                        "Consulta a coluna quantum_vector no banco via cosine similarity",
+                        "Retorna top-k documentos ordenados por score",
+                    ],
+                },
+            }
+        if pipeline == Pipeline.STATISTICAL:
+            return {
+                "algorithm": "statistical-sbert-svd-cosine",
+                "comparator": "cosine similarity (score = 1 - cosine_distance)",
+                "candidate_strategy": "full dataset ranking in statistical_vector space",
+                "description": "BERT → PCA(128) → TruncatedSVD(64) → L2 normalize → cosine similarity ranking.",
+                "debug": {
+                    "vector_space": "statistical_vector",
+                    "encoder": "StatisticalPipelineEncoder",
+                    "normalization": "L2",
+                    "steps": [
+                        "Recebe a pergunta em texto",
+                        "Gera embedding semântico base via SentenceTransformer (384-dim)",
+                        "Reduz dimensionalidade e centraliza via PCA (384→128)",
+                        "Aplica fatoração matricial via TruncatedSVD (128→64)",
+                        "Normaliza com norma L2",
+                        "Consulta a coluna statistical_vector no banco via cosine similarity",
+                        "Retorna top-k documentos ordenados por score",
+                    ],
+                },
+            }
+        return {}
 
     def _search_metrics(self, results, latency_ms: float, top_k: int) -> dict:
         scores = [float(x.score) for x in results]
@@ -293,16 +407,16 @@ class SearchUseCase:
             },
         }
 
-    def _compare_rankings(self, classical_results, quantum_results, top_k: int) -> dict:
-        c_ids = [item.doc_id for item in classical_results[:top_k]]
-        q_ids = [item.doc_id for item in quantum_results[:top_k]]
-        c_set = set(c_ids)
-        q_set = set(q_ids)
-        intersection = sorted(c_set.intersection(q_set))
-
+    def _compare_rankings(self, classical_results, quantum_results, statistical_results, top_k: int) -> dict:
+        c_ids = {item.doc_id for item in classical_results[:top_k]}
+        q_ids = {item.doc_id for item in quantum_results[:top_k]}
+        s_ids = {item.doc_id for item in statistical_results[:top_k]}
         return {
             "top_k": top_k,
-            "common_doc_ids": intersection,
+            "common_doc_ids": sorted(c_ids & q_ids & s_ids),
+            "common_classical_quantum": sorted(c_ids & q_ids),
+            "common_classical_statistical": sorted(c_ids & s_ids),
+            "common_quantum_statistical": sorted(q_ids & s_ids),
         }
 
     def execute(self, dataset: str, query: str, mode: str = "compare", top_k: int = 5) -> dict:
@@ -313,6 +427,7 @@ class SearchUseCase:
             top_k=top_k,
             query=preview_text(query),
         )
+
         if mode == Pipeline.CLASSICAL.value:
             results, latency_ms = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
             payload = {
@@ -324,6 +439,7 @@ class SearchUseCase:
             }
             audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
             return payload
+
         if mode == Pipeline.QUANTUM.value:
             results, latency_ms = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
             payload = {
@@ -335,9 +451,23 @@ class SearchUseCase:
             }
             audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
             return payload
+
+        if mode == Pipeline.STATISTICAL.value:
+            results, latency_ms = self._search_single(dataset, query, Pipeline.STATISTICAL, top_k)
+            payload = {
+                "query": query,
+                "mode": mode,
+                "results": results,
+                "metrics": self._search_metrics(results, latency_ms, top_k),
+                "algorithm_details": self._algorithm_details(Pipeline.STATISTICAL),
+            }
+            audit_print("search.use_case.completed", dataset_id=dataset, mode=mode, results=preview_results(results))
+            return payload
+
         if mode == Pipeline.COMPARE.value:
             classical, classical_latency = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
             quantum, quantum_latency = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
+            statistical, statistical_latency = self._search_single(dataset, query, Pipeline.STATISTICAL, top_k)
             payload = {
                 "query": query,
                 "mode": Pipeline.COMPARE.value,
@@ -353,8 +483,13 @@ class SearchUseCase:
                         "metrics": self._search_metrics(quantum, quantum_latency, top_k),
                         "algorithm_details": self._algorithm_details(Pipeline.QUANTUM),
                     },
+                    "statistical": {
+                        "results": statistical,
+                        "metrics": self._search_metrics(statistical, statistical_latency, top_k),
+                        "algorithm_details": self._algorithm_details(Pipeline.STATISTICAL),
+                    },
                 },
-                "comparison_metrics": self._compare_rankings(classical, quantum, top_k),
+                "comparison_metrics": self._compare_rankings(classical, quantum, statistical, top_k),
             }
             audit_print(
                 "search.use_case.completed",
@@ -362,10 +497,12 @@ class SearchUseCase:
                 mode=mode,
                 classical_results=preview_results(classical),
                 quantum_results=preview_results(quantum),
+                statistical_results=preview_results(statistical),
                 common_doc_ids=payload["comparison_metrics"]["common_doc_ids"],
             )
             return payload
-        raise ValidationError("Invalid mode. Use 'classical', 'quantum', or 'compare'.")
+
+        raise ValidationError("Invalid mode. Use 'classical', 'quantum', 'statistical', or 'compare'.")
 
 
 class UpsertGroundTruthUseCase:
@@ -391,11 +528,16 @@ class EvaluateUseCase:
         self.search = search
         self.metrics = metrics
 
-    def execute(self, dataset: str, pipeline: str = "compare", k: int = 5) -> dict:
+    def execute(self, dataset: str, pipeline: str = "compare", k: int = 10) -> dict:
         gts = self.ground_truths.list_by_dataset(dataset)
         if not gts:
             raise NotFoundError("No ground truth entries found for dataset.")
-        pipelines = [Pipeline.CLASSICAL.value, Pipeline.QUANTUM.value] if pipeline == "compare" else [pipeline]
+
+        if pipeline == "compare":
+            pipelines = [Pipeline.CLASSICAL.value, Pipeline.QUANTUM.value, Pipeline.STATISTICAL.value]
+        else:
+            pipelines = [pipeline]
+
         aggregates: list[EvaluationAggregate] = []
         for current_pipeline in pipelines:
             per_query: list[EvaluationResult] = []
@@ -422,9 +564,10 @@ class EvaluateUseCase:
                     mean_precision_at_k=sum(x.precision_at_k for x in per_query) / n,
                     mean_recall_at_k=sum(x.recall_at_k for x in per_query) / n,
                     mean_ndcg_at_k=sum(x.ndcg_at_k for x in per_query) / n,
-                    mean_spearman=sum(x.spearman for x in per_query) / n,
+                    mean_mrr=sum(x.mrr for x in per_query) / n,
                 )
             )
+
         return {
             "dataset_id": dataset,
             "k": k,
@@ -434,7 +577,7 @@ class EvaluateUseCase:
                     "mean_precision_at_k": agg.mean_precision_at_k,
                     "mean_recall_at_k": agg.mean_recall_at_k,
                     "mean_ndcg_at_k": agg.mean_ndcg_at_k,
-                    "mean_spearman": agg.mean_spearman,
+                    "mean_mrr": agg.mean_mrr,
                     "per_query": [
                         {
                             "query_id": q.query_id,
@@ -442,7 +585,7 @@ class EvaluateUseCase:
                             "precision_at_k": q.precision_at_k,
                             "recall_at_k": q.recall_at_k,
                             "ndcg_at_k": q.ndcg_at_k,
-                            "spearman": q.spearman,
+                            "mrr": q.mrr,
                             "top_k_doc_ids": q.top_k_doc_ids,
                         }
                         for q in agg.per_query

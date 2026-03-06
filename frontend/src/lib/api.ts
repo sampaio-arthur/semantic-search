@@ -106,6 +106,7 @@ export interface SearchResponseLite {
 export interface SearchComparison {
   classical: SearchResponseLite;
   quantum: SearchResponseLite;
+  statistical?: SearchResponseLite;
 }
 
 export interface SearchResponse {
@@ -118,6 +119,9 @@ export interface SearchResponse {
   comparison_metrics?: {
     top_k: number;
     common_doc_ids: string[];
+    common_classical_quantum?: string[];
+    common_classical_statistical?: string[];
+    common_quantum_statistical?: string[];
   };
   algorithm_details?: SearchAlgorithmDetails;
 }

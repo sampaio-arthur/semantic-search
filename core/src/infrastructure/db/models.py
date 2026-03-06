@@ -79,8 +79,9 @@ class DocumentModel(Base):
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     text: Mapped[str] = mapped_column(Text)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    embedding_vector: Mapped[list[float] | None] = mapped_column(VectorType(384), nullable=True)
-    quantum_vector: Mapped[list[float] | None] = mapped_column(VectorType(16), nullable=True)
+    embedding_vector: Mapped[list[float] | None] = mapped_column(VectorType(64), nullable=True)
+    quantum_vector: Mapped[list[float] | None] = mapped_column(VectorType(64), nullable=True)
+    statistical_vector: Mapped[list[float] | None] = mapped_column(VectorType(64), nullable=True)
 
 
 class QueryModel(Base):

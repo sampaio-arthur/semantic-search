@@ -12,20 +12,21 @@ Este arquivo descreve as dependencias declaradas no projeto e o uso real no codi
 | `uvicorn[standard]` | `docker-compose.yml` (comando do servico `core`) | Servidor ASGI para subir a API |
 | `sqlalchemy` | `core/src/infrastructure/db/models.py`, `core/src/infrastructure/db/session.py`, `core/src/infrastructure/repositories/sqlalchemy_repositories.py` | ORM, sessoes, queries, modelos e persistencia |
 | `psycopg[binary]` | usado indiretamente por `sqlalchemy` quando `DATABASE_URL` aponta para PostgreSQL | Driver PostgreSQL |
-| `alembic` | `core/alembic/*`, `core/alembic.ini` | Estrutura de migracoes (hoje o app sobe com `Base.metadata.create_all`) |
+| `alembic` | `core/alembic/*`, `core/alembic.ini` | Estrutura de migracoes (o app sobe com `Base.metadata.create_all`) |
 | `pydantic` | `core/src/infrastructure/api/schemas.py`, `core/src/infrastructure/config.py` | Schemas da API e base de configuracao |
-| `pydantic-settings` | `core/src/infrastructure/config.py` | Leitura de `.env` via `BaseSettings` (ha fallback simples no proprio arquivo se indisponivel) |
+| `pydantic-settings` | `core/src/infrastructure/config.py` | Leitura de `.env` via `BaseSettings` |
 | `python-jose[cryptography]` | `core/src/infrastructure/security/adapters.py` | Criacao/validacao de JWT access e refresh |
 | `passlib[bcrypt]` | `core/src/infrastructure/security/adapters.py` | Hash e verificacao de senha via `CryptContext` |
 | `bcrypt` | backend do `passlib` | Algoritmo de hash efetivo |
-| `python-multipart` | `core/src/infrastructure/api/routers/api_router.py` (OAuth2 form + endpoint compativel `/search/file`) | Necessario para `OAuth2PasswordRequestForm` |
-| `numpy` | `core/src/infrastructure/encoders/quantum.py`, `core/src/infrastructure/metrics/sklearn_metrics.py` | Vetores/arrays, padding e saida do encoder quantico |
-| `scipy` | `core/src/infrastructure/metrics/sklearn_metrics.py` | `scipy.stats.spearmanr` |
-| `scikit-learn` | `core/src/infrastructure/metrics/sklearn_metrics.py` | `precision_score`, `recall_score`, `ndcg_score` |
-| `pgvector` | `core/src/infrastructure/db/vector_type.py` | Tipo vetorial no PostgreSQL (`pgvector.sqlalchemy.Vector`) |
-| `sentence-transformers` | `core/src/infrastructure/encoders/classical.py` | Encoder classico (`SbertEncoder`) |
-| `pennylane` | `core/src/infrastructure/encoders/quantum.py` | Encoder quantico-inspirado (`qml.qnode`, `AngleEmbedding`, `qml.probs`) |
+| `python-multipart` | `core/src/infrastructure/api/routers/api_router.py` | Necessario para `OAuth2PasswordRequestForm` |
+| `numpy` | `core/src/infrastructure/encoders/quantum.py`, `core/src/infrastructure/encoders/statistical.py` | Vetores/arrays, operacoes matriciais nos encoders |
+| `scipy` | `core/src/infrastructure/encoders/statistical.py` | `TruncatedSVD` via `sklearn` usa scipy internamente; presente como dependencia direta |
+| `scikit-learn` | `core/src/infrastructure/encoders/classical.py`, `core/src/infrastructure/encoders/quantum.py`, `core/src/infrastructure/encoders/statistical.py` | `PCA` e `TruncatedSVD` usados nos tres pipelines; `joblib` (dependencia transitiva do sklearn) usado para serializar/deserializar estado fitted em disco |
+| `pgvector` | `core/src/infrastructure/db/models.py` | Tipo vetorial no PostgreSQL (`pgvector.sqlalchemy.Vector`) |
+| `sentence-transformers` | `core/src/infrastructure/encoders/base.py` (`SharedSbertBase`) | Modelo SBERT compartilhado pelos tres encoders (`all-MiniLM-L6-v2`) |
+| `pennylane` | `core/src/infrastructure/encoders/quantum.py` | Encoder quantico-inspirado (`qml.qnode`, `AngleEmbedding`, `StronglyEntanglingLayers`, `qml.probs`) |
 | `autoray` | dependencia de compatibilidade do ecossistema PennyLane (pinada em `requirements.txt`) | Mantida para evitar quebra de versao com `pennylane==0.39.0` |
+| `ir-measures` | `core/src/infrastructure/metrics/ir_measures_adapter.py` | Metricas IR padrao: `nDCG@k`, `Recall@k`, `MRR@k`, `P@k` via `calc_aggregate()` |
 
 ### Testes e suporte de teste (declaradas no mesmo `requirements.txt`)
 
@@ -59,9 +60,9 @@ Este arquivo descreve as dependencias declaradas no projeto e o uso real no codi
 
 ### Dependencias de runtime presentes por causa do kit UI (`frontend/src/components/ui/*.tsx`)
 
-Estas dependencias aparecem em componentes shadcn gerados e estao no repositrio, mesmo que varias nao sejam usadas pelas paginas atuais:
+Estas dependencias aparecem em componentes shadcn gerados e estao no repositorio, mesmo que varias nao sejam usadas pelas paginas atuais:
 
-- `@hookform/resolvers` (referenciado via componentes/formularios gerados; nao usado nas paginas atuais)
+- `@hookform/resolvers`
 - `@radix-ui/react-accordion`
 - `@radix-ui/react-alert-dialog`
 - `@radix-ui/react-aspect-ratio`
@@ -94,10 +95,7 @@ Estas dependencias aparecem em componentes shadcn gerados e estao no repositrio,
 - `zod`
 - `date-fns`
 
-Uso tipico dessas libs no projeto:
-
-- componentes em `frontend/src/components/ui/*.tsx` (template shadcn)
-- o app atual usa so uma parte pequena desse conjunto nas paginas de Auth/Chat/Benchmarks
+O app atual usa apenas uma parte pequena desse conjunto nas paginas de Auth/Chat/Benchmarks.
 
 ### Dev/build/test (frontend)
 
@@ -121,4 +119,4 @@ Uso tipico dessas libs no projeto:
 | --- | --- | --- |
 | `Docker Compose` | `docker-compose.yml` | Orquestra `core`, `frontend`, `db` |
 | `pgvector/pgvector:pg16` | servico `db` em `docker-compose.yml` | Postgres com extensao `vector` |
-| `Makefile` | `Makefile` | Atalhos de operacao |
+| `Makefile` | `Makefile` | Atalhos de operacao (`setup`, `up`, `down`, `logs`, `test`, `restart`) |

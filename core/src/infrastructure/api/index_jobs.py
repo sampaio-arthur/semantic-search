@@ -98,7 +98,12 @@ class IndexJobRegistry:
             if not force_reindex:
                 snap = services.dataset_snapshots.get(dataset_id)
                 docs_count = services.documents.count_by_dataset(dataset_id)
-                if snap and docs_count > 0 and snap.document_count == docs_count:
+                encoders_fitted = (
+                    services.index_dataset.classical_encoder.is_fitted
+                    and services.index_dataset.quantum_encoder.is_fitted
+                    and services.index_dataset.statistical_encoder.is_fitted
+                )
+                if snap and docs_count > 0 and snap.document_count == docs_count and encoders_fitted:
                     def _mark_skipped(s: IndexJobState) -> None:
                         s.status = "completed"
                         s.finished_at = _utcnow()
