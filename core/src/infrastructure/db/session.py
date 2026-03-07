@@ -41,21 +41,19 @@ def init_db(settings: Settings | None = None) -> None:
         conn.execute(text("""
             DO $$
             BEGIN
-                IF EXISTS (
+                IF NOT EXISTS (
                     SELECT 1 FROM information_schema.columns
                     WHERE table_name='documents' AND column_name='embedding_vector'
                 ) THEN
-                    ALTER TABLE documents DROP COLUMN embedding_vector;
+                    ALTER TABLE documents ADD COLUMN embedding_vector vector(64);
                 END IF;
-                ALTER TABLE documents ADD COLUMN IF NOT EXISTS embedding_vector vector(64);
 
-                IF EXISTS (
+                IF NOT EXISTS (
                     SELECT 1 FROM information_schema.columns
                     WHERE table_name='documents' AND column_name='quantum_vector'
                 ) THEN
-                    ALTER TABLE documents DROP COLUMN quantum_vector;
+                    ALTER TABLE documents ADD COLUMN quantum_vector vector(64);
                 END IF;
-                ALTER TABLE documents ADD COLUMN IF NOT EXISTS quantum_vector vector(64);
 
                 IF NOT EXISTS (
                     SELECT 1 FROM information_schema.columns

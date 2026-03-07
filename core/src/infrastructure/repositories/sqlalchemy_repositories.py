@@ -226,6 +226,7 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
         stmt = (
             select(DocumentModel, (1 - column.cosine_distance(query_vector)).label("score"))
             .where(DocumentModel.dataset == dataset)
+            .where(column.is_not(None))
             .order_by(column.cosine_distance(query_vector))
             .limit(top_k)
         )

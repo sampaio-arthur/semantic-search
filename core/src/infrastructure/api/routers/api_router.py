@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from audit import audit_print, preview_text
+from audit import audit_print, category_log, preview_text
 from domain.entities import Document, SearchResult
 from domain.exceptions import ConflictError, DomainError, NotFoundError, UnauthorizedError, ValidationError
 from infrastructure.api.deps import Services, get_current_user_id, get_services
@@ -364,6 +364,11 @@ def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Se
         query_id=payload.query_id,
         query=preview_text(payload.query),
     )
+    category_log("SEARCH", pipeline=payload.mode, query=preview_text(payload.query), top_k=payload.top_k)
+    if payload.query_id:
+        gt = _find_ground_truth(services, payload.dataset_id, payload.query_id, payload.query)
+        if gt:
+            category_log("EVAL QUERY USED", query_id=payload.query_id, pipeline=payload.mode)
     result = services.search.execute(dataset=payload.dataset_id, query=payload.query, mode=payload.mode, top_k=payload.top_k)
     output: dict[str, Any] = {
         "query": result["query"],
@@ -572,3 +577,9 @@ def delete_benchmark_label(dataset_id: str, benchmark_id: str, services: Service
     if not services.ground_truths.delete(dataset_id, benchmark_id):
         raise HTTPException(status_code=404, detail="Benchmark not found")
     return None
+
+
+@compat_router.get("/evaluation/queries")
+def list_evaluation_queries(dataset_id: str = "beir/trec-covid", services: Services = Depends(get_services)):
+    items = services.ground_truths.list_by_dataset(dataset_id)
+    return [{"query_id": item.query_id, "query": item.query_text} for item in items]

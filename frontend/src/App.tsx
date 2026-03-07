@@ -8,6 +8,7 @@ import Index from './pages/Index';
 import Auth from './pages/Auth';
 import Chat from './pages/Chat';
 import Benchmarks from './pages/Benchmarks';
+import EvaluationQueries from './pages/EvaluationQueries';
 import NotFound from './pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
             <Route path='/auth' element={<Auth />} />
             <Route path='/chat' element={<Chat />} />
             <Route path='/benchmarks' element={<Benchmarks />} />
+            <Route path='/evaluation-queries' element={<EvaluationQueries />} />
             <Route path='*' element={<NotFound />} />
           </Routes>
         </BrowserRouter>

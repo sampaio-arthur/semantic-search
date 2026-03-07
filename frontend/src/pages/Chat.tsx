@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -17,6 +17,7 @@ const DEFAULT_DATASET_ID = 'beir/trec-covid';
 export default function Chat() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
@@ -24,6 +25,8 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [indexStatus, setIndexStatus] = useState<DatasetIndexStatus | null>(null);
+  const [topK, setTopK] = useState(5);
+  const [prefillQuery, setPrefillQuery] = useState(searchParams.get('q') ?? '');
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
 
@@ -101,9 +104,10 @@ export default function Chat() {
     }
   };
 
-  const handleSendMessage = async (payload: { message: string }) => {
+  const handleSendMessage = async (payload: { message: string; topK: number }) => {
     const userText = payload.message.trim();
     if (!userText) return;
+    setPrefillQuery('');
 
     setIsLoading(true);
 
@@ -124,7 +128,7 @@ export default function Chat() {
       await api.indexDataset(DEFAULT_DATASET_ID, false, (status) => {
         setIndexStatus(status.status === 'running' ? status : null);
       });
-      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
+      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID, undefined, payload.topK);
 
       setLastResponse(searchResponse);
       if (conversationId) {
@@ -218,7 +222,13 @@ export default function Chat() {
               </div>
             </div>
           )}
-          <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            isLoading={isLoading}
+            topK={topK}
+            onTopKChange={setTopK}
+            prefillQuery={prefillQuery}
+          />
         </div>
       </main>
     </div>

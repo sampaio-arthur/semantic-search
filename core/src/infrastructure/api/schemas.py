@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserOut(BaseModel):
@@ -76,6 +76,17 @@ class SearchRequest(BaseModel):
     mode: str = "compare"
     top_k: int = 5
     chat_id: int | None = None
+
+    @field_validator("top_k")
+    @classmethod
+    def validate_top_k(cls, v: int) -> int:
+        if v < 5:
+            raise ValueError("top_k must be >= 5")
+        if v > 25:
+            raise ValueError("top_k must be <= 25")
+        if v % 5 != 0:
+            raise ValueError("top_k must be multiple of 5")
+        return v
 
 
 class GroundTruthUpsertRequest(BaseModel):

@@ -128,6 +128,11 @@ export interface SearchResponse {
   algorithm_details?: SearchAlgorithmDetails;
 }
 
+export interface EvaluationQuery {
+  query_id: string;
+  query: string;
+}
+
 export interface DatasetIndexStatus {
   dataset_id: string;
   status: 'idle' | 'running' | 'completed' | 'failed';
@@ -442,7 +447,7 @@ class ApiClient {
     }
   }
 
-  async searchDataset(query: string, datasetId: string, queryId?: string): Promise<SearchResponse> {
+  async searchDataset(query: string, datasetId: string, queryId?: string, topK = 5): Promise<SearchResponse> {
     const response = await this.fetchWithAuth(`${API_BASE_URL}/search/dataset`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -451,7 +456,7 @@ class ApiClient {
         query,
         query_id: queryId,
         mode: 'compare',
-        top_k: 5,
+        top_k: topK,
         candidate_k: 20,
       }),
     });
@@ -483,6 +488,20 @@ class ApiClient {
 
     if (!response.ok) {
       const detail = await this.readErrorDetail(response, 'Erro ao carregar dataset');
+      throw new Error(detail);
+    }
+
+    return response.json();
+  }
+
+  async getEvaluationQueries(datasetId: string): Promise<EvaluationQuery[]> {
+    const response = await this.fetchWithTimeout(
+      `${API_BASE_URL}/evaluation/queries?dataset_id=${encodeURIComponent(datasetId)}`,
+      { headers: this.getHeaders(false) }
+    );
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao carregar queries de avaliação');
       throw new Error(detail);
     }
 
