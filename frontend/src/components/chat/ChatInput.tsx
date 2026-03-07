@@ -33,19 +33,6 @@ export function ChatInput({ onSendMessage, isLoading, topK, onTopKChange, prefil
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4">
-      <div className="flex items-center gap-2 mb-1 px-1">
-        <label className="text-xs text-muted-foreground">Top resultados:</label>
-        <select
-          value={topK}
-          onChange={(e) => onTopKChange(Number(e.target.value))}
-          disabled={isLoading}
-          className="text-xs bg-background border border-border rounded px-2 py-0.5 text-foreground outline-none focus:ring-1 focus:ring-ring"
-        >
-          {TOP_K_OPTIONS.map((k) => (
-            <option key={k} value={k}>{k}</option>
-          ))}
-        </select>
-      </div>
       <div className="chat-input-container flex items-center gap-2 p-3">
         <input
           type="text"

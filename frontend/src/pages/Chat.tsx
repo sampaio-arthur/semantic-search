@@ -194,6 +194,18 @@ export default function Chat() {
             </Button>
           )}
           <h1 className="text-lg font-medium">Quantum Search</h1>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Top resultados:</label>
+            <select
+              value={topK}
+              onChange={(e) => setTopK(Number(e.target.value))}
+              className="text-xs bg-background border border-border rounded px-2 py-0.5 text-foreground outline-none focus:ring-1 focus:ring-ring"
+            >
+              {[5, 10, 15, 20, 25].map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </div>
         </header>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
