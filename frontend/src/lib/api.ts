@@ -131,6 +131,7 @@ export interface SearchResponse {
 export interface EvaluationQuery {
   query_id: string;
   query: string;
+  ideal_answer: string | null;
 }
 
 export interface DatasetIndexStatus {

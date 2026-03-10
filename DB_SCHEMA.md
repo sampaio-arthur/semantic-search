@@ -54,7 +54,7 @@ Todos os tres pipelines armazenam vetores de dimensao 64 (`VECTOR_DIM=64`) em co
 - `metadata` (JSON/JSONB)
 - `embedding_vector vector(64)` — Pipeline classico (SBERT → PCA(64) → L2)
 - `quantum_vector vector(64)` — Pipeline quantico-inspirado (SBERT → PCA_base → circuito → Hellinger → PCA_final → L2)
-- `statistical_vector vector(64)` — Pipeline estatistico (SBERT → PCA(64) → TruncatedSVD(64) → L2)
+- `statistical_vector vector(64)` — Pipeline estatistico (SBERT → PCA(128) → TruncatedSVD(64) → L2)
 
 Constraint:
 
@@ -67,6 +67,7 @@ Constraint:
 - `split`
 - `query_id`
 - `query_text`
+- `ideal_answer` (TEXT, opcional — resposta ideal para calculo de `answer_similarity`)
 - `user_id` (opcional)
 - `created_at`
 

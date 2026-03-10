@@ -58,18 +58,18 @@ Arquivo: `core/src/infrastructure/encoders/statistical.py` (`StatisticalPipeline
 
 ```
 SBERT(384)
-  → PCA(n=64, random_state=seed)           → base_vector_64
+  → PCA(n=128, random_state=seed)          → base_vector_128
   → TruncatedSVD(n=64, random_state=seed) → L2 normalize → dim=64
 ```
 
-- Fatoracao linear em dois estagios partindo da mesma base de 64 dimensoes que os outros pipelines
-- PCA(64) centraliza e reduz o espaco; TruncatedSVD(64) fatoriza ainda mais sem recentrar
-- `svd_input_dim = 64 = VECTOR_DIM = PCA_INTERMEDIATE_DIM`
+- Fatoracao linear em dois estagios: PCA(128) centraliza e reduz o espaco; TruncatedSVD(64) fatoriza para a dimensao final
+- `PCA_INTERMEDIATE_DIM = 128 > VECTOR_DIM = 64` — o SVD realiza reducao real de dimensionalidade, descobrindo um subespa co diferente do PCA(64) isolado
+- Se `PCA_INTERMEDIATE_DIM == VECTOR_DIM`, o SVD degeneraria para uma rotacao ortogonal e a similaridade cosseno seria identica ao pipeline classico
 - Ambas as transformacoes ajustadas sobre o corpus na indexacao
 
 Logs emitidos durante encode:
 ```
-[PIPELINE statistical] base_vector_dim=64 svd_input_dim=64 svd_output_dim=64
+[PIPELINE statistical] base_vector_dim=128 svd_input_dim=128 svd_output_dim=64
 [NORMALIZE] vector_norm=1.0
 ```
 
@@ -181,15 +181,45 @@ Dois mecanismos de log coexistem:
    [PCA] input_dim=384 output_dim=64 pipeline=classical
    [PIPELINE classical] final_vector_dim=64
    [PIPELINE quantum] base_vector_dim=64 quantum_vector_dim=64 concat_dim=128 final_vector_dim=64
-   [PIPELINE statistical] base_vector_dim=64 svd_input_dim=64 svd_output_dim=64
+   [PIPELINE statistical] base_vector_dim=128 svd_input_dim=128 svd_output_dim=64
    [NORMALIZE] vector_norm=1.0
    [VECTOR SAMPLE classical] values=[0.1234, -0.0312, ...]
-   [METRICS] pipeline=classical nDCG@10=0.42 Recall@10=0.38 MRR=0.51 P@10=0.21
+   [INDEX] dataset=beir/trec-covid doc_count=171332
+   [SEARCH] pipeline=classical top_k=10 results=10
    [TIME] pipeline=classical encode_time_ms=5.2
    [TIME] pipeline=classical search_time_ms=1.1
    [TIME] pipeline=classical total_time_ms=6.3
-   [SEARCH] pipeline=classical top_k=10 results=10
+   [METRICS INPUT] pipeline=classical run_docs=10 qrels_docs=3
+   [METRICS RESULT] pipeline=classical nDCG@10=0.42 Recall@10=0.38 MRR=0.51 P@10=0.21
+   [SEMANTIC EVAL] query_id=1 pipeline=classical similarity=0.7341
    ```
+
+## Avaliacao semantica (answer_similarity)
+
+Arquivo: `core/src/infrastructure/metrics/answer_similarity.py` (`AnswerSimilarityService`)
+
+Calcula a similaridade semantica entre o texto recuperado e uma resposta ideal cadastrada (`ideal_answer`).
+
+**Metodo**:
+
+```
+embed(top3_text) · embed(ideal_answer)
+──────────────────────────────────────  =  cosine_similarity
+  ||embed(top3_text)|| × ||embed(ideal_answer)||
+```
+
+Onde `top3_text = " ".join(doc.text for doc in results[:3])` — concatenacao dos tres primeiros documentos recuperados.
+
+**Modelo de embedding**: mesmo `all-MiniLM-L6-v2` compartilhado pelos encoders via `SharedSbertBase`.
+
+**Comportamento especial**: vetor de norma zero retorna `0.0` com log explicito.
+
+**Retorno**: float em `[-1, 1]` arredondado a 4 casas decimais.
+
+**Integracao**:
+- Busca individual: `_attach_answer_similarity()` em `api_router.py` — calcula por pipeline apos cada busca se `ideal_answer` existir para a query
+- Avaliacao batch: `EvaluateUseCase` — calcula por query, agrega como `mean_answer_similarity`
+- Frontend: `ComparisonPanel.tsx` exibe linha "Answer Similarity" por pipeline
 
 ## Lote de indexacao
 

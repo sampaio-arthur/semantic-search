@@ -75,9 +75,15 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
   const hasIrLabels = Boolean(
     classicalMetrics?.has_labels || quantumMetrics?.has_labels || statisticalMetrics?.has_labels
   );
+  const hasIdealAnswer = Boolean(
+    classicalMetrics?.has_ideal_answer || quantumMetrics?.has_ideal_answer || statisticalMetrics?.has_ideal_answer
+  );
   const irObservation = hasIrLabels
     ? 'Calculado com gabarito (qrels).'
     : 'Requer gabarito (qrels) para calcular.';
+  const simObservation = hasIdealAnswer
+    ? 'Similaridade semântica entre resposta recuperada (top-3 docs) e resposta ideal.'
+    : 'Requer ideal_answer no gabarito.';
   const metricMax = 1;
 
   return (
@@ -195,6 +201,21 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     )}
                     <td className='py-2'>{irObservation}</td>
                   </tr>
+                  <tr>
+                    <td className='py-2 pr-3 text-foreground'>Answer Similarity</td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell value={metricNumber(classicalMetrics?.answer_similarity)} maxValue={metricMax} />
+                    </td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell value={metricNumber(quantumMetrics?.answer_similarity)} maxValue={metricMax} />
+                    </td>
+                    {hasStatistical && (
+                      <td className='py-2 pr-3'>
+                        <MetricCell value={metricNumber(statisticalMetrics?.answer_similarity)} maxValue={metricMax} />
+                      </td>
+                    )}
+                    <td className='py-2'>{simObservation}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -203,7 +224,7 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
 
         <p className='text-xs text-muted-foreground'>
           {hasIrLabels
-            ? 'Métricas IR reais exibidas para esta query com gabarito (qrels) encontrado.'
+            ? `Métricas IR reais exibidas para esta query com gabarito (qrels) encontrado.${hasIdealAnswer ? ' Answer Similarity calculada com ideal_answer do gabarito.' : ''}`
             : 'Sem gabarito correspondente para esta query no chat. Para métricas IR canônicas, use queries do BEIR (query_id) ou avaliação batch.'}
         </p>
       </div>

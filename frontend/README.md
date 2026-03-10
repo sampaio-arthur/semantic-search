@@ -7,10 +7,13 @@ O frontend:
 - autentica usuarios
 - cria e persiste conversas
 - dispara indexacao do dataset BEIR local (`beir/trec-covid`)
-- executa busca comparativa entre:
-  - pipeline classico por embeddings (sBERT)
-  - pipeline quantico-inspirado por vetorizacao quantica simulada (PennyLane)
-- exibe resultados, scores e latencia dos dois pipelines
+- executa busca comparativa entre os tres pipelines:
+  - pipeline classico: SBERT → PCA(64) → L2
+  - pipeline quantico-inspirado: SBERT → PCA_base → QCircuit → Hellinger → PCA_final → L2 (PennyLane)
+  - pipeline estatistico: SBERT → PCA(128) → TruncatedSVD(64) → L2
+- exibe resultados, scores e latencia dos tres pipelines
+- permite cadastrar `ideal_answer` por query (paginas Benchmarks e EvaluationQueries)
+- exibe metrica de avaliacao semantica `answer_similarity` na comparacao
 
 ## Executar localmente
 

@@ -262,9 +262,11 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
             select(QueryModel).where(QueryModel.dataset == item.dataset, QueryModel.split == "test", QueryModel.query_id == item.query_id)
         )
         row.user_id = item.user_id
+        if item.ideal_answer is not None:
+            row.ideal_answer = item.ideal_answer
         self.session.commit()
         self.session.refresh(row)
-        return GroundTruth(row.query_id, row.query_text, list(item.relevant_doc_ids), row.dataset, row.user_id, row.created_at)
+        return GroundTruth(row.query_id, row.query_text, list(item.relevant_doc_ids), row.dataset, row.user_id, row.created_at, row.ideal_answer)
 
     def upsert_qrels(self, dataset: str, split: str, query_id: str, query_text: str, qrels: dict[str, int]) -> None:
         row = self.session.scalar(
@@ -313,7 +315,7 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
             .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
         ).all()
         relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
-        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at)
+        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer)
 
     def list_by_dataset(self, dataset: str) -> list[GroundTruth]:
         rows = self.session.scalars(
@@ -329,7 +331,7 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
                 .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
             ).all()
             relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
-            items.append(GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at))
+            items.append(GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer))
         return items
 
     def delete(self, dataset: str, query_id: str) -> bool:

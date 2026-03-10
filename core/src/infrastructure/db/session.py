@@ -79,6 +79,7 @@ def init_db(settings: Settings | None = None) -> None:
                 """
             )
         )
+        conn.execute(text("ALTER TABLE IF EXISTS queries ADD COLUMN IF NOT EXISTS ideal_answer TEXT"))
         conn.execute(
             text(
                 """

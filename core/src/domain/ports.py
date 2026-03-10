@@ -106,6 +106,7 @@ class EvaluationAggregate:
     mean_recall_at_k: float
     mean_ndcg_at_k: float
     mean_mrr: float
+    mean_answer_similarity: float | None = None
 
 
 class MetricsPort(Protocol):

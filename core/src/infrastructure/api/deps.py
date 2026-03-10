@@ -24,6 +24,7 @@ from infrastructure.encoders.base import SharedSbertBase
 from infrastructure.encoders.classical import ClassicalPipelineEncoder
 from infrastructure.encoders.quantum import QuantumPipelineEncoder
 from infrastructure.encoders.statistical import StatisticalPipelineEncoder
+from infrastructure.metrics.answer_similarity import AnswerSimilarityService
 from infrastructure.metrics.ir_measures_adapter import IrMeasuresAdapter
 from infrastructure.repositories.sqlalchemy_repositories import (
     SqlAlchemyChatRepository,
@@ -100,6 +101,7 @@ class Services:
     upsert_ground_truth: UpsertGroundTruthUseCase
     evaluate: EvaluateUseCase
     build_assistant_message: BuildAssistantRetrievalMessageUseCase
+    answer_similarity: AnswerSimilarityService
     jwt: JoseJwtProvider
 
 
@@ -120,6 +122,7 @@ def build_services(session: Session, settings: Settings) -> Services:
 
     datasets = BeirLocalDatasetProvider()
     metrics = IrMeasuresAdapter()
+    answer_sim = AnswerSimilarityService(classical_encoder.base)
 
     search_uc = SearchUseCase(docs, classical_encoder, quantum_encoder, statistical_encoder)
     return Services(
@@ -142,8 +145,9 @@ def build_services(session: Session, settings: Settings) -> Services:
         index_dataset=IndexDatasetUseCase(datasets, docs, classical_encoder, quantum_encoder, statistical_encoder, dataset_snaps, gts, encoder_state_dir=settings.encoder_state_dir),
         search=search_uc,
         upsert_ground_truth=UpsertGroundTruthUseCase(gts),
-        evaluate=EvaluateUseCase(gts, search_uc, metrics),
+        evaluate=EvaluateUseCase(gts, search_uc, metrics, answer_sim),
         build_assistant_message=BuildAssistantRetrievalMessageUseCase(),
+        answer_similarity=answer_sim,
         dataset_snapshots=dataset_snaps,
         jwt=jwt,
     )

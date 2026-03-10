@@ -544,11 +544,11 @@ class UpsertGroundTruthUseCase:
     def __init__(self, ground_truths: GroundTruthRepositoryPort) -> None:
         self.ground_truths = ground_truths
 
-    def execute(self, dataset: str, query_id: str, query_text: str, relevant_doc_ids: list[str], user_id: int | None = None) -> GroundTruth:
+    def execute(self, dataset: str, query_id: str, query_text: str, relevant_doc_ids: list[str], user_id: int | None = None, ideal_answer: str | None = None) -> GroundTruth:
         if not relevant_doc_ids:
             raise ValidationError("relevant_doc_ids must not be empty.")
         return self.ground_truths.upsert(
-            GroundTruth(query_id=query_id, query_text=query_text, relevant_doc_ids=relevant_doc_ids, dataset=dataset, user_id=user_id)
+            GroundTruth(query_id=query_id, query_text=query_text, relevant_doc_ids=relevant_doc_ids, dataset=dataset, user_id=user_id, ideal_answer=ideal_answer)
         )
 
 
@@ -558,10 +558,12 @@ class EvaluateUseCase:
         ground_truths: GroundTruthRepositoryPort,
         search: SearchUseCase,
         metrics: MetricsPort,
+        answer_similarity=None,
     ) -> None:
         self.ground_truths = ground_truths
         self.search = search
         self.metrics = metrics
+        self.answer_similarity = answer_similarity
 
     def execute(self, dataset: str, pipeline: str = "compare", k: int = 10) -> dict:
         gts = self.ground_truths.list_by_dataset(dataset)
@@ -579,18 +581,37 @@ class EvaluateUseCase:
             for gt in gts:
                 response = self.search.execute(dataset=dataset, query=gt.query_text, mode=current_pipeline, top_k=k)
                 items = response["results"]
-                per_query.append(
-                    self.metrics.evaluate_query(
-                        query_id=gt.query_id,
-                        query_text=gt.query_text,
-                        pipeline=current_pipeline,
-                        retrieved_doc_ids=[item.doc_id for item in items],
-                        retrieved_scores=[item.score for item in items],
-                        relevant_doc_ids=gt.relevant_doc_ids,
-                        k=k,
-                    )
+                eval_result = self.metrics.evaluate_query(
+                    query_id=gt.query_id,
+                    query_text=gt.query_text,
+                    pipeline=current_pipeline,
+                    retrieved_doc_ids=[item.doc_id for item in items],
+                    retrieved_scores=[item.score for item in items],
+                    relevant_doc_ids=gt.relevant_doc_ids,
+                    k=k,
                 )
+                if gt.ideal_answer and self.answer_similarity is not None:
+                    answer_text = " ".join(item.text for item in items[:3])
+                    sim = self.answer_similarity.compute(answer_text, gt.ideal_answer)
+                    eval_result = EvaluationResult(
+                        query_id=eval_result.query_id,
+                        query_text=eval_result.query_text,
+                        pipeline=eval_result.pipeline,
+                        precision_at_k=eval_result.precision_at_k,
+                        recall_at_k=eval_result.recall_at_k,
+                        ndcg_at_k=eval_result.ndcg_at_k,
+                        mrr=eval_result.mrr,
+                        top_k_doc_ids=eval_result.top_k_doc_ids,
+                        answer_similarity=sim,
+                    )
+                    category_log(
+                        "SEMANTIC EVAL",
+                        _extra={"query_id": gt.query_id, "pipeline": current_pipeline, "similarity": round(sim, 4)},
+                    )
+                per_query.append(eval_result)
             n = max(len(per_query), 1)
+            sims = [x.answer_similarity for x in per_query if x.answer_similarity is not None]
+            mean_sim = sum(sims) / len(sims) if sims else None
             aggregates.append(
                 EvaluationAggregate(
                     pipeline=current_pipeline,
@@ -600,6 +621,7 @@ class EvaluateUseCase:
                     mean_recall_at_k=sum(x.recall_at_k for x in per_query) / n,
                     mean_ndcg_at_k=sum(x.ndcg_at_k for x in per_query) / n,
                     mean_mrr=sum(x.mrr for x in per_query) / n,
+                    mean_answer_similarity=mean_sim,
                 )
             )
 
@@ -613,6 +635,7 @@ class EvaluateUseCase:
                     "mean_recall_at_k": agg.mean_recall_at_k,
                     "mean_ndcg_at_k": agg.mean_ndcg_at_k,
                     "mean_mrr": agg.mean_mrr,
+                    "mean_answer_similarity": agg.mean_answer_similarity,
                     "per_query": [
                         {
                             "query_id": q.query_id,
@@ -622,6 +645,7 @@ class EvaluateUseCase:
                             "ndcg_at_k": q.ndcg_at_k,
                             "mrr": q.mrr,
                             "top_k_doc_ids": q.top_k_doc_ids,
+                            "answer_similarity": q.answer_similarity,
                         }
                         for q in agg.per_query
                     ],

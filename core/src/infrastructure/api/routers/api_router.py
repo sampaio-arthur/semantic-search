@@ -84,10 +84,15 @@ def _find_ground_truth(services: Services, dataset_id: str, query_id: str | None
     normalized = (query_text or "").strip().lower()
     if not normalized:
         return None
-    for item in services.ground_truths.list_by_dataset(dataset_id):
-        if (item.query_text or "").strip().lower() == normalized:
-            return item
-    return None
+    matches = [
+        item for item in services.ground_truths.list_by_dataset(dataset_id)
+        if (item.query_text or "").strip().lower() == normalized
+    ]
+    if not matches:
+        return None
+    # Prefer the entry that has an ideal_answer set, so Answer Similarity can be computed.
+    with_answer = [m for m in matches if m.ideal_answer]
+    return with_answer[0] if with_answer else matches[0]
 
 
 def _enrich_metrics(existing: dict | None, evaluated, k: int) -> dict:
@@ -131,6 +136,7 @@ def _attach_ir_metrics(
             output["comparison"][pipeline_key]["metrics"] = _enrich_metrics(
                 pipeline_data.get("metrics"), pipeline_eval, k
             )
+        _attach_answer_similarity(output, gt, services)
         return
     if output.get("mode") in {"classical", "quantum", "statistical"}:
         results = output.get("results") or []
@@ -144,6 +150,41 @@ def _attach_ir_metrics(
             k=k,
         )
         output["metrics"] = _enrich_metrics(output.get("metrics"), eval_result, k)
+        _attach_answer_similarity(output, gt, services)
+
+
+def _attach_answer_similarity(output: dict[str, Any], gt, services: Services) -> None:
+    if not gt.ideal_answer:
+        return
+    if "comparison" in output:
+        for pipeline_key in ("classical", "quantum", "statistical"):
+            pipeline_data = output["comparison"].get(pipeline_key)
+            if not pipeline_data:
+                continue
+            results = pipeline_data.get("results") or []
+            answer_text = " ".join(r["text"] for r in results[:3])
+            similarity = services.answer_similarity.compute(answer_text, gt.ideal_answer)
+            metrics = pipeline_data.get("metrics") or {}
+            metrics["answer_similarity"] = round(similarity, 4)
+            metrics["has_ideal_answer"] = True
+            pipeline_data["metrics"] = metrics
+            category_log(
+                "SEMANTIC EVAL",
+                _extra={"query_id": gt.query_id, "pipeline": pipeline_key, "similarity": round(similarity, 4)},
+            )
+        return
+    if output.get("mode") in {"classical", "quantum", "statistical"}:
+        results = output.get("results") or []
+        answer_text = " ".join(r["text"] for r in results[:3])
+        similarity = services.answer_similarity.compute(answer_text, gt.ideal_answer)
+        metrics = output.get("metrics") or {}
+        metrics["answer_similarity"] = round(similarity, 4)
+        metrics["has_ideal_answer"] = True
+        output["metrics"] = metrics
+        category_log(
+            "SEMANTIC EVAL",
+            _extra={"query_id": gt.query_id, "pipeline": output["mode"], "similarity": round(similarity, 4)},
+        )
 
 
 @router.get("/health")
@@ -540,7 +581,7 @@ def list_benchmark_labels(dataset_id: str, services: Services = Depends(get_serv
                 "benchmark_id": item.query_id,
                 "dataset_id": item.dataset,
                 "query_text": item.query_text,
-                "ideal_answer": "",
+                "ideal_answer": item.ideal_answer or "",
                 "relevant_doc_ids": item.relevant_doc_ids,
             }
             for item in items
@@ -550,7 +591,11 @@ def list_benchmark_labels(dataset_id: str, services: Services = Depends(get_serv
 
 @compat_router.post("/benchmarks/labels")
 def upsert_benchmark_label(payload: BenchmarkLabelInput, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
-    relevant = payload.relevant_doc_ids or []
+    # Reuse existing entry's query_id if one already exists for this query text,
+    # so we don't create a duplicate row with a text-derived id.
+    existing = _find_ground_truth(services, payload.dataset_id, None, payload.query_text)
+    query_id = existing.query_id if existing else payload.query_text.lower().replace(" ", "-")[:64]
+    relevant = payload.relevant_doc_ids or (existing.relevant_doc_ids if existing else [])
     if not relevant:
         candidate = services.search.execute(payload.dataset_id, payload.query_text, "classical", 5)
         relevant = [r.doc_id for r in (candidate.get("results") or [])]
@@ -558,16 +603,17 @@ def upsert_benchmark_label(payload: BenchmarkLabelInput, user_id: int = Depends(
         raise HTTPException(status_code=400, detail="Nao achou relevancia na pergunta.")
     item = services.upsert_ground_truth.execute(
         dataset=payload.dataset_id,
-        query_id=payload.query_text.lower().replace(" ", "-")[:64],
+        query_id=query_id,
         query_text=payload.query_text,
         relevant_doc_ids=relevant,
         user_id=user_id,
+        ideal_answer=payload.ideal_answer or None,
     )
     return {
         "benchmark_id": item.query_id,
         "dataset_id": item.dataset,
         "query_text": item.query_text,
-        "ideal_answer": payload.ideal_answer or "",
+        "ideal_answer": item.ideal_answer or "",
         "relevant_doc_ids": item.relevant_doc_ids,
     }
 
@@ -582,4 +628,4 @@ def delete_benchmark_label(dataset_id: str, benchmark_id: str, services: Service
 @compat_router.get("/evaluation/queries")
 def list_evaluation_queries(dataset_id: str = "beir/trec-covid", services: Services = Depends(get_services)):
     items = services.ground_truths.list_by_dataset(dataset_id)
-    return [{"query_id": item.query_id, "query": item.query_text} for item in items]
+    return [{"query_id": item.query_id, "query": item.query_text, "ideal_answer": item.ideal_answer} for item in items]

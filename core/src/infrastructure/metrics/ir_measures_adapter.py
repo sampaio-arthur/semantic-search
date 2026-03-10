@@ -41,6 +41,10 @@ class IrMeasuresAdapter:
             retrieved_count=len(retrieved_doc_ids),
             relevant_count=len(relevant_doc_ids),
         )
+        category_log(
+            "METRICS INPUT",
+            _extra={"pipeline": pipeline, "run_docs": len(retrieved_doc_ids), "qrels_docs": len(relevant_doc_ids)},
+        )
 
         # Build qrels: all relevant docs with relevance=1
         qrels = [
@@ -58,10 +62,10 @@ class IrMeasuresAdapter:
 
         results = ir_measures.calc_aggregate(measures, qrels, run)
 
-        ndcg_val = float(results.get(nDCG @ k, 0.0))
-        recall_val = float(results.get(R @ k, 0.0))
-        mrr_val = float(results.get(MRR @ k, 0.0))
-        precision_val = float(results.get(P @ k, 0.0))
+        ndcg_val = float(results[nDCG @ k])
+        recall_val = float(results[R @ k])
+        mrr_val = float(results[MRR @ k])
+        precision_val = float(results[P @ k])
 
         audit_print(
             "metrics.ir_measures.evaluate.completed",
@@ -74,7 +78,7 @@ class IrMeasuresAdapter:
             precision=round(precision_val, 4),
         )
         category_log(
-            "METRICS",
+            "METRICS RESULT",
             _extra={
                 "pipeline": pipeline,
                 f"nDCG@{k}": round(ndcg_val, 4),

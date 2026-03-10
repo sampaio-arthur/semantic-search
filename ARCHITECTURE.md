@@ -25,11 +25,11 @@ Todos os tres encoders vivem em `infrastructure/encoders/` e compartilham `Share
 |---|---|---|
 | `ClassicalPipelineEncoder` | `encoders/classical.py` | SBERT(384) → PCA(64) → L2 |
 | `QuantumPipelineEncoder` | `encoders/quantum.py` | SBERT(384) → PCA_base(64) → PCA_angles(6) → AngleEmbedding+StronglyEntanglingLayers → probs(64) → sqrt(probs) → concat(128) → PCA_final(64) → L2 |
-| `StatisticalPipelineEncoder` | `encoders/statistical.py` | SBERT(384) → PCA(64) → TruncatedSVD(64) → L2 |
+| `StatisticalPipelineEncoder` | `encoders/statistical.py` | SBERT(384) → PCA(128) → TruncatedSVD(64) → L2 |
 
 Os singletons de encoder (`_classical_encoder`, `_quantum_encoder`, `_statistical_encoder`) sao criados uma vez na primeira requisicao e reutilizados. O estado fitted (PCAs, SVD) persiste entre requisicoes e tambem sobrevive a reinicializacoes do container: apos o fit, cada encoder serializa seu estado em disco via `joblib` (`save_state`/`load_state`), e na inicializacao do container o estado e recarregado automaticamente. Diretorio configuravel via `ENCODER_STATE_DIR` (default `core/data/encoder_state/` no host).
 
-**Nota sobre o pipeline statistical**: usa `PCA(n=64)` seguido de `TruncatedSVD(n=64)`, garantindo que `svd_input_dim=64` (mesmo valor de `VECTOR_DIM`). A variavel `PCA_INTERMEDIATE_DIM` controla essa dimensao e tem default `64`.
+**Nota sobre o pipeline statistical**: usa `PCA(n=128)` seguido de `TruncatedSVD(n=64)`. A variavel `PCA_INTERMEDIATE_DIM` controla a dimensao intermediaria (default `128`). E obrigatorio que `PCA_INTERMEDIATE_DIM > VECTOR_DIM`: se iguais, o SVD degenera para uma rotacao ortogonal e o resultado sob similaridade cosseno seria identico ao pipeline classico.
 
 ## Principios importantes aplicados
 
