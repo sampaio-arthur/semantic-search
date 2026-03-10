@@ -58,8 +58,11 @@ class Settings(BaseSettings):
     quantum_n_qubits: int = 6  # 2^6 = 64
 
     # Intermediate PCA dimension for statistical pipeline before TruncatedSVD.
-    # Must equal vector_dim so that svd_input_dim == vector_dim per spec.
-    pca_intermediate_dim: int = 64
+    # Must be greater than vector_dim so TruncatedSVD performs real dimensionality
+    # reduction (pca_intermediate_dim → vector_dim). If equal to vector_dim, SVD
+    # degenerates to a full orthogonal rotation, making statistical identical to
+    # classical under cosine similarity (invariant to orthogonal transforms).
+    pca_intermediate_dim: int = 128
 
     classical_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     seed: int = 42

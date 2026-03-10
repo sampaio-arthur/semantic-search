@@ -397,7 +397,7 @@ class SearchUseCase:
             }
         if pipeline == Pipeline.STATISTICAL:
             return {
-                "algorithm": "statistical-sbert-svd-cosine",
+                "algorithm": "statistical-sbert-pca-svd-cosine",
                 "comparator": "cosine similarity (score = 1 - cosine_distance)",
                 "candidate_strategy": "full dataset ranking in statistical_vector space",
                 "description": "BERT → PCA(128) → TruncatedSVD(64) → L2 normalize → cosine similarity ranking.",
@@ -408,8 +408,8 @@ class SearchUseCase:
                     "steps": [
                         "Recebe a pergunta em texto",
                         "Gera embedding semântico base via SentenceTransformer (384-dim)",
-                        "Reduz dimensionalidade e centraliza via PCA (384→128)",
-                        "Aplica fatoração matricial via TruncatedSVD (128→64)",
+                        "Centraliza e reduz via PCA (384→128, pca_intermediate_dim)",
+                        "Fatoração matricial via TruncatedSVD (128→64): seleciona direções de máxima variância no espaço PCA",
                         "Normaliza com norma L2",
                         "Consulta a coluna statistical_vector no banco via cosine similarity",
                         "Retorna top-k documentos ordenados por score",
