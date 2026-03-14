@@ -64,8 +64,20 @@ Os singletons de encoder (`_classical_encoder`, `_quantum_encoder`, `_statistica
 2. `SearchUseCase` chama `encode()` do(s) encoder(s) correspondente(s)
 3. Repositorio consulta apenas a coluna vetorial correspondente (`embedding_vector`, `quantum_vector` ou `statistical_vector`)
 4. Retorna ranking com score (cosine similarity = 1 - cosine_distance)
-5. Opcional: enriquecimento com metricas IR via `IrMeasuresAdapter` se ground truth existir
-6. Opcional: persistencia de mensagem `assistant` no chat
+5. Opcional: enriquecimento com metricas IR via `IrMeasuresAdapter` se ground truth (`qrels`) existir para a query
+6. Opcional: calculo de `answer_similarity` via `AnswerSimilarityService` se `ideal_answer` estiver definido na query — concatena top-3 docs recuperados e computa similaridade cosseno SBERT com o `ideal_answer`
+7. Opcional: persistencia de mensagem `assistant` no chat
+
+## Avaliacao Semantica (answer_similarity)
+
+Servico: `AnswerSimilarityService` (`infrastructure/metrics/answer_similarity.py`)
+
+- Calcula `cosine_similarity(embed(top3_text), embed(ideal_answer))` usando o mesmo modelo SBERT compartilhado
+- `top3_text` = concatenacao dos textos dos tres primeiros documentos recuperados
+- `ideal_answer` persistido na coluna `queries.ideal_answer TEXT NULL`; editavel por query via `EvaluationQueries.tsx`
+- Retorna float em `[-1, 1]` arredondado a 4 casas decimais
+- Integrado em busca individual (`_attach_answer_similarity()`) e avaliacao batch (`EvaluateUseCase` → `mean_answer_similarity`)
+- Log emitido: `[SEMANTIC EVAL] query_id=... pipeline=... similarity=...`
 
 ## Observacoes
 

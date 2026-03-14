@@ -31,7 +31,9 @@ Inclui:
 - PostgreSQL + pgvector
 - autenticacao JWT
 - chats persistidos
-- cadastro de ground truth e avaliacao batch com metricas IR padrao
+- cadastro de ground truth e avaliacao batch com metricas IR padrao (nDCG@k, Recall@k, MRR@k, P@k via `ir_measures`)
+- avaliacao semantica com `answer_similarity`: similaridade cosseno entre top-3 documentos recuperados e `ideal_answer` via SBERT
+- edicao de `ideal_answer` por query via pagina `EvaluationQueries` no frontend
 
 ## Como o `.env.example` deve ser usado
 
