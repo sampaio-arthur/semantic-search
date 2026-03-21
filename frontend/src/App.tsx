@@ -9,6 +9,7 @@ import Auth from './pages/Auth';
 import Chat from './pages/Chat';
 import Benchmarks from './pages/Benchmarks';
 import EvaluationQueries from './pages/EvaluationQueries';
+import BatchEvaluation from './pages/BatchEvaluation';
 import NotFound from './pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path='/chat' element={<Chat />} />
             <Route path='/benchmarks' element={<Benchmarks />} />
             <Route path='/evaluation-queries' element={<EvaluationQueries />} />
+            <Route path='/batch-evaluation' element={<BatchEvaluation />} />
             <Route path='*' element={<NotFound />} />
           </Routes>
         </BrowserRouter>

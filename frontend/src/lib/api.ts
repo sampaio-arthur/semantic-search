@@ -134,6 +134,52 @@ export interface EvaluationQuery {
   ideal_answer: string | null;
 }
 
+export interface BatchEvaluationStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  progress: {
+    current_query: number;
+    total_queries: number;
+    current_pipeline: string;
+    completed_pipelines: string[];
+  };
+  elapsed_seconds: number;
+  result: BatchEvaluationResult | null;
+  error: string | null;
+}
+
+export interface BatchEvaluationResult {
+  dataset_id: string;
+  k: number;
+  pipelines: BatchPipelineResult[];
+}
+
+export interface BatchPipelineResult {
+  pipeline: string;
+  mean_precision_at_k: number;
+  mean_recall_at_k: number;
+  mean_ndcg_at_k: number;
+  mean_mrr: number;
+  mean_answer_similarity: number | null;
+  mean_encode_time_ms: number | null;
+  mean_search_time_ms: number | null;
+  mean_total_time_ms: number | null;
+  query_count: number;
+  per_query: BatchPerQueryResult[];
+}
+
+export interface BatchPerQueryResult {
+  query_id: string;
+  query_text: string;
+  precision_at_k: number;
+  recall_at_k: number;
+  ndcg_at_k: number;
+  mrr: number;
+  answer_similarity: number | null;
+  encode_time_ms: number | null;
+  search_time_ms: number | null;
+  total_time_ms: number | null;
+}
+
 export interface DatasetIndexStatus {
   dataset_id: string;
   status: 'idle' | 'running' | 'completed' | 'failed';
@@ -448,7 +494,7 @@ class ApiClient {
     }
   }
 
-  async searchDataset(query: string, datasetId: string, queryId?: string, topK = 5): Promise<SearchResponse> {
+  async searchDataset(query: string, datasetId: string, queryId?: string): Promise<SearchResponse> {
     const response = await this.fetchWithAuth(`${API_BASE_URL}/search/dataset`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -457,8 +503,7 @@ class ApiClient {
         query,
         query_id: queryId,
         mode: 'compare',
-        top_k: topK,
-        candidate_k: 20,
+        top_k: 25,
       }),
     });
 
@@ -548,6 +593,37 @@ class ApiClient {
       const detail = await this.readErrorDetail(response, 'Erro ao remover gabarito');
       throw new Error(detail);
     }
+  }
+
+  async startBatchEvaluation(datasetId: string = 'beir/trec-covid'): Promise<BatchEvaluationStatus> {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/benchmarks/evaluate/start`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        dataset_id: datasetId,
+        pipelines: ['classical', 'quantum', 'statistical'],
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao iniciar avaliação batch');
+      throw new Error(detail);
+    }
+
+    return response.json();
+  }
+
+  async getBatchEvaluationStatus(): Promise<BatchEvaluationStatus> {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/benchmarks/evaluate/status`, {
+      headers: this.getHeaders(false),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao consultar status da avaliação');
+      throw new Error(detail);
+    }
+
+    return response.json();
   }
 }
 

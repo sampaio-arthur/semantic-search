@@ -25,7 +25,6 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [indexStatus, setIndexStatus] = useState<DatasetIndexStatus | null>(null);
-  const [topK, setTopK] = useState(5);
   const [prefillQuery, setPrefillQuery] = useState(searchParams.get('q') ?? '');
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
@@ -104,7 +103,7 @@ export default function Chat() {
     }
   };
 
-  const handleSendMessage = async (payload: { message: string; topK: number }) => {
+  const handleSendMessage = async (payload: { message: string }) => {
     const userText = payload.message.trim();
     if (!userText) return;
     setPrefillQuery('');
@@ -128,7 +127,7 @@ export default function Chat() {
       await api.indexDataset(DEFAULT_DATASET_ID, false, (status) => {
         setIndexStatus(status.status === 'running' ? status : null);
       });
-      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID, undefined, payload.topK);
+      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
 
       setLastResponse(searchResponse);
       if (conversationId) {
@@ -194,18 +193,7 @@ export default function Chat() {
             </Button>
           )}
           <h1 className="text-lg font-medium">Quantum Search</h1>
-          <div className="ml-auto flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">Top resultados:</label>
-            <select
-              value={topK}
-              onChange={(e) => setTopK(Number(e.target.value))}
-              className="text-xs bg-background border border-border rounded px-2 py-0.5 text-foreground outline-none focus:ring-1 focus:ring-ring"
-            >
-              {[5, 10, 15, 20, 25].map((k) => (
-                <option key={k} value={k}>{k}</option>
-              ))}
-            </select>
-          </div>
+          <span className="ml-auto text-xs text-muted-foreground">Top 25</span>
         </header>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
@@ -237,8 +225,6 @@ export default function Chat() {
           <ChatInput
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
-            topK={topK}
-            onTopKChange={setTopK}
             prefillQuery={prefillQuery}
           />
         </div>

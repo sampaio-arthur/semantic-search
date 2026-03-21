@@ -79,6 +79,9 @@ class EvaluationResult:
     mrr: float
     top_k_doc_ids: list[str]
     answer_similarity: float | None = None
+    encode_time_ms: float | None = None
+    search_time_ms: float | None = None
+    total_time_ms: float | None = None
 
 
 @dataclass(slots=True)

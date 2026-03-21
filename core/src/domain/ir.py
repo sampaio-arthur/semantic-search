@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+FIXED_TOP_K: int = 25
+
 
 def l2_normalize(vector: list[float]) -> list[float]:
     norm = math.sqrt(sum(x * x for x in vector))

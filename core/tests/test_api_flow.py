@@ -78,7 +78,7 @@ def test_minimal_required_flow():
     )
     assert gt_resp.status_code == 200, gt_resp.text
 
-    eval_resp = client.post("/api/evaluate", json={"dataset_id": "beir/trec-covid", "pipeline": "compare", "k": 5}, headers=headers)
+    eval_resp = client.post("/api/evaluate", json={"dataset_id": "beir/trec-covid", "pipeline": "compare", "k": 25}, headers=headers)
     assert eval_resp.status_code == 200, eval_resp.text
     eval_payload = eval_resp.json()
     assert len(eval_payload["pipelines"]) == 3

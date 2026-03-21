@@ -55,8 +55,8 @@ Passos reais:
 2. **Passo 1**: Itera documentos do corpus, coleta textos
 3. **Fit**: Encode em lote via `SharedSbertBase` (SBERT) → ajusta `ClassicalPipelineEncoder`, `QuantumPipelineEncoder` (3 PCAs + passo do circuito) e `StatisticalPipelineEncoder` (PCA + SVD)
 4. **Passo 2**: Transforma cada documento com os tres encoders → upsert em `documents` em lotes de 64
-5. Persiste `queries` e `qrels` (split `test`) no banco
-6. Persiste snapshot em `dataset_snapshots` (doc_ids, queries, metadados)
+5. Persiste `queries` e `qrels` (split `test`) no banco. Queries excluidas (11 de 50 no BEIR trec-covid) sao filtradas por `is_excluded_query()`, persistindo apenas 39 queries validas
+6. Persiste snapshot em `dataset_snapshots` (doc_ids, queries, metadados) com `query_count=39`
 
 Observacoes:
 
@@ -125,7 +125,7 @@ Tabelas usadas:
 - `queries` (`dataset`, `split`, `query_id`, `query_text`, `ideal_answer`)
 - `qrels` (`dataset`, `split`, `query_id`, `doc_id`, `relevance`)
 
-Para compatibilidade com o fluxo atual de avaliacao, o repositorio monta `relevant_doc_ids` a partir de `qrels` com `relevance > 0`.
+Para compatibilidade com o fluxo atual de avaliacao, o repositorio monta `relevant_doc_ids` a partir de `qrels` com `relevance > 0`. Alem disso, `list_by_dataset()` filtra automaticamente as 11 queries excluidas no nivel SQL (`WHERE query_text NOT IN (EXCLUDED_QUERY_TEXTS)`), retornando apenas 39 queries validas para avaliacao.
 
 ### Cadastro de gabaritos
 
@@ -144,24 +144,27 @@ Caso de uso: `EvaluateUseCase`
 
 Fluxo:
 
-1. Le gabaritos do dataset a partir de `queries` + `qrels`
-2. Executa busca por `query_text` no(s) pipeline(s)
+1. Le gabaritos do dataset via `list_by_dataset()` (retorna apenas 39 queries validas — queries excluidas filtradas no SQL do repositorio)
+2. Executa busca por `query_text` no(s) pipeline(s) com `top_k=25` fixo
 3. Calcula metricas IR por query via `IrMeasuresAdapter`
 4. Se `ideal_answer` estiver definido na query, calcula `answer_similarity` via `AnswerSimilarityService`
-5. Agrega medias por pipeline (metricas IR + `mean_answer_similarity`)
+5. Captura timing por query (`encode_time_ms`, `search_time_ms`, `total_time_ms`)
+6. Agrega medias por pipeline (metricas IR + `mean_answer_similarity` + `mean_encode_time_ms`, `mean_search_time_ms`, `mean_total_time_ms`)
+
+A avaliacao batch pode ser executada de forma assincrona via `EvaluationJobRegistry` (`infrastructure/api/evaluation_jobs.py`), com progresso rastreado por query e pipeline. O frontend (`BatchEvaluation.tsx`) faz polling no status e exibe graficos comparativos (Recharts).
 
 Metricas de retrieval calculadas (via biblioteca `ir_measures`, sem implementacao manual):
 
-- `nDCG@k` — Normalized Discounted Cumulative Gain
-- `Recall@k`
-- `MRR@k` — Mean Reciprocal Rank
-- `P@k` — Precision at k
+- `nDCG@25` — Normalized Discounted Cumulative Gain
+- `Recall@25`
+- `MRR@25` — Mean Reciprocal Rank
+- `P@25` — Precision at 25
 
 Metrica de avaliacao semantica:
 
 - `answer_similarity` — similaridade cosseno entre o embedding SBERT dos top-3 documentos recuperados (concatenados) e o embedding do `ideal_answer`. Calculada por `AnswerSimilarityService` (`infrastructure/metrics/answer_similarity.py`) usando o mesmo modelo `all-MiniLM-L6-v2` compartilhado pelos encoders.
 
-**Nota sobre top_k e metricas**: o valor de `top_k` controla tanto o numero de documentos retornados pela query SQL (`LIMIT top_k`) quanto o conjunto sobre o qual as metricas IR sao calculadas. As metricas sao computadas sobre os `k` documentos recuperados, nao sobre o corpus completo.
+**Nota sobre top_k e metricas**: o valor de `top_k` e fixado em 25 (`FIXED_TOP_K` em `domain/ir.py`) e controla tanto o numero de documentos retornados pela query SQL (`LIMIT 25`) quanto o conjunto sobre o qual as metricas IR sao calculadas. As metricas sao computadas sobre os 25 documentos recuperados, nao sobre o corpus completo. O frontend nao permite alterar esse valor.
 
 ## Avaliacao semantica (ideal_answer / answer_similarity)
 
@@ -175,7 +178,7 @@ O sistema implementa avaliacao semantica da qualidade das respostas recuperadas 
 
 ### Edicao via frontend
 
-- Pagina `EvaluationQueries.tsx`: lista as queries do dataset com botao para editar o `ideal_answer` inline; exibe contador "N/M com gabarito"
+- Pagina `EvaluationQueries.tsx`: lista as 39 queries validas do dataset (queries excluidas filtradas no backend pelo repositorio) com botao para editar o `ideal_answer` inline; exibe contador "N/39 com gabarito"
 - Pagina `Benchmarks.tsx`: formulario manual para criar benchmark labels com `ideal_answer`
 - Ambas as paginas chamam `api.upsertBenchmarkLabel()` que envia `ideal_answer` via `POST /benchmarks/labels`
 
@@ -244,6 +247,9 @@ Tambem emitido via `audit_print()`:
 - `/search/dataset`
 - `/datasets*`
 - `/benchmarks/labels*`
+- `/benchmarks/evaluate/start` — inicia avaliacao batch assincrona
+- `/benchmarks/evaluate/status` — polling do status da avaliacao batch
+- `/evaluation/queries` — lista queries BEIR com ideal answers
 
 Rota descontinuada mantida apenas para retorno de erro:
 
@@ -325,4 +331,6 @@ Detalhes em `DB_SCHEMA.md`.
 - Metricas: `core/src/infrastructure/metrics/ir_measures_adapter.py`
 - Encoders: `core/src/infrastructure/encoders/base.py`, `classical.py`, `quantum.py`, `statistical.py`
 - Rotas: `core/src/infrastructure/api/routers/api_router.py`
+- Job de avaliacao assincrono: `core/src/infrastructure/api/evaluation_jobs.py`
+- Dashboard de avaliacao batch: `frontend/src/pages/BatchEvaluation.tsx`
 - Frontend API client: `frontend/src/lib/api.ts`

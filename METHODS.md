@@ -77,7 +77,9 @@ Resultado armazenado em `documents.statistical_vector vector(64)`
 
 ## Normalizacao L2
 
-Arquivo: `core/src/domain/ir.py` (`l2_normalize`)
+Arquivo: `core/src/domain/ir.py` (`l2_normalize`, `FIXED_TOP_K`)
+
+**`FIXED_TOP_K = 25`**: constante que fixa o numero de documentos recuperados em todas as buscas e avaliacoes. Definida em `domain/ir.py` e usada pelo API router para sobrescrever qualquer `top_k` enviado pelo cliente.
 
 Para um vetor `v = [v1, v2, ..., vn]`:
 
@@ -117,15 +119,15 @@ Metricas calculadas pela biblioteca `ir_measures` (padrao da area, sem implement
 
 | Metrica | Descricao |
 |---|---|
-| `nDCG@k` | Normalized Discounted Cumulative Gain at k |
-| `Recall@k` | Fracao dos documentos relevantes recuperados no top-k |
-| `MRR@k` | Mean Reciprocal Rank at k |
-| `P@k` | Precision at k |
+| `nDCG@25` | Normalized Discounted Cumulative Gain at 25 |
+| `Recall@25` | Fracao dos documentos relevantes recuperados no top-25 |
+| `MRR@25` | Mean Reciprocal Rank at 25 |
+| `P@25` | Precision at 25 |
 
-**Fluxo de calculo**:
+**Fluxo de calculo** (sobre as 39 queries validas — 11 queries excluidas sao filtradas no nivel SQL pelo repositorio via `list_by_dataset()`):
 1. Qrels (ground truth) construidos como `ir_measures.Qrel(query_id, doc_id, relevance=1)` para cada doc relevante
 2. Run (resultados recuperados) construidos como `ir_measures.ScoredDoc(query_id, doc_id, score)`
-3. `ir_measures.calc_aggregate([nDCG@k, R@k, MRR@k, P@k], run, qrels)` calcula tudo de uma vez
+3. `ir_measures.calc_aggregate([nDCG@25, R@25, MRR@25, P@25], run, qrels)` calcula tudo de uma vez
 4. Resultados agregados por media em `EvaluateUseCase` (`n = max(len(per_query), 1)`)
 
 **Metricas de busca individuais** (por query no `SearchUseCase`): retornam `None` por padrao e sao preenchidas com valores reais pelo `_attach_ir_metrics()` no api_router quando ground truth existe para aquela query.
@@ -185,12 +187,12 @@ Dois mecanismos de log coexistem:
    [NORMALIZE] vector_norm=1.0
    [VECTOR SAMPLE classical] values=[0.1234, -0.0312, ...]
    [INDEX] dataset=beir/trec-covid doc_count=171332
-   [SEARCH] pipeline=classical top_k=10 results=10
+   [SEARCH] pipeline=classical top_k=25 results=25
    [TIME] pipeline=classical encode_time_ms=5.2
    [TIME] pipeline=classical search_time_ms=1.1
    [TIME] pipeline=classical total_time_ms=6.3
-   [METRICS INPUT] pipeline=classical run_docs=10 qrels_docs=3
-   [METRICS RESULT] pipeline=classical nDCG@10=0.42 Recall@10=0.38 MRR=0.51 P@10=0.21
+   [METRICS INPUT] pipeline=classical run_docs=25 qrels_docs=3
+   [METRICS RESULT] pipeline=classical nDCG@25=0.42 Recall@25=0.38 MRR=0.51 P@25=0.21
    [SEMANTIC EVAL] query_id=1 pipeline=classical similarity=0.7341
    ```
 

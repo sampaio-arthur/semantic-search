@@ -139,10 +139,10 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     <td className='py-2 pr-3'>{classicalResults.length}</td>
                     <td className='py-2 pr-3'>{quantumResults.length}</td>
                     {hasStatistical && <td className='py-2 pr-3'>{statisticalResults.length}</td>}
-                    <td className='py-2'>Top-k retornado por pipeline</td>
+                    <td className='py-2'>Top 25 retornado por pipeline</td>
                   </tr>
                   <tr className='border-b border-border/60'>
-                    <td className='py-2 pr-3 text-foreground'>Precision@k</td>
+                    <td className='py-2 pr-3 text-foreground'>Precision@25</td>
                     <td className='py-2 pr-3'>
                       <MetricCell value={metricNumber(classicalMetrics?.precision_at_k)} maxValue={metricMax} />
                     </td>
@@ -157,7 +157,7 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
-                    <td className='py-2 pr-3 text-foreground'>Recall@k</td>
+                    <td className='py-2 pr-3 text-foreground'>Recall@25</td>
                     <td className='py-2 pr-3'>
                       <MetricCell value={metricNumber(classicalMetrics?.recall_at_k)} maxValue={metricMax} />
                     </td>
@@ -172,7 +172,7 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
-                    <td className='py-2 pr-3 text-foreground'>NDCG@k</td>
+                    <td className='py-2 pr-3 text-foreground'>nDCG@25</td>
                     <td className='py-2 pr-3'>
                       <MetricCell value={metricNumber(classicalMetrics?.ndcg_at_k)} maxValue={metricMax} />
                     </td>
@@ -187,7 +187,7 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
-                    <td className='py-2 pr-3 text-foreground'>MRR@k</td>
+                    <td className='py-2 pr-3 text-foreground'>MRR@25</td>
                     <td className='py-2 pr-3'>
                       <MetricCell value={metricNumber((classicalMetrics as Record<string, unknown>)?.mrr as number | null)} maxValue={metricMax} />
                     </td>

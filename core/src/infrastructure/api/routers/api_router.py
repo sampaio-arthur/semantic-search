@@ -9,9 +9,12 @@ from fastapi.security import OAuth2PasswordRequestForm
 from audit import audit_print, category_log, preview_text
 from domain.entities import Document, SearchResult
 from domain.exceptions import ConflictError, DomainError, NotFoundError, UnauthorizedError, ValidationError
+from domain.ir import FIXED_TOP_K
 from infrastructure.api.deps import Services, get_current_user_id, get_services
+from infrastructure.api.evaluation_jobs import evaluation_job_registry
 from infrastructure.api.index_jobs import index_job_registry
 from infrastructure.api.schemas import (
+    BatchEvaluateRequest,
     BenchmarkLabelInput,
     ChatCreateRequest,
     ChatDetailOut,
@@ -395,22 +398,23 @@ def compat_index_dataset_status(dataset_id: str, services: Services = Depends(ge
 
 
 def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Services) -> dict:
+    effective_top_k = FIXED_TOP_K
     audit_print(
         "api.search.request",
         user_id=user_id,
         dataset_id=payload.dataset_id,
         mode=payload.mode,
-        top_k=payload.top_k,
+        top_k=effective_top_k,
         chat_id=payload.chat_id,
         query_id=payload.query_id,
         query=preview_text(payload.query),
     )
-    category_log("SEARCH", pipeline=payload.mode, query=preview_text(payload.query), top_k=payload.top_k)
+    category_log("SEARCH", pipeline=payload.mode, query=preview_text(payload.query), top_k=effective_top_k)
     if payload.query_id:
         gt = _find_ground_truth(services, payload.dataset_id, payload.query_id, payload.query)
         if gt:
             category_log("EVAL QUERY USED", query_id=payload.query_id, pipeline=payload.mode)
-    result = services.search.execute(dataset=payload.dataset_id, query=payload.query, mode=payload.mode, top_k=payload.top_k)
+    result = services.search.execute(dataset=payload.dataset_id, query=payload.query, mode=payload.mode, top_k=effective_top_k)
     output: dict[str, Any] = {
         "query": result["query"],
         "mode": result["mode"],
@@ -433,7 +437,7 @@ def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Se
         output["comparison"] = serialized_comparison
     if result.get("comparison_metrics") is not None:
         output["comparison_metrics"] = result["comparison_metrics"]
-    _attach_ir_metrics(output, services, payload.dataset_id, payload.query_id, payload.query, payload.top_k)
+    _attach_ir_metrics(output, services, payload.dataset_id, payload.query_id, payload.query, effective_top_k)
     if payload.chat_id is not None:
         assistant_payload = services.build_assistant_message.execute(result)
         services.add_message.save_assistant_retrieval_result(user_id, payload.chat_id, assistant_payload)
@@ -493,7 +497,7 @@ def upsert_ground_truth(payload: GroundTruthUpsertRequest, user_id: int = Depend
 @router.post("/evaluate")
 def evaluate(payload: EvaluateRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
     try:
-        return services.evaluate.execute(payload.dataset_id, payload.pipeline, payload.k)
+        return services.evaluate.execute(payload.dataset_id, payload.pipeline, FIXED_TOP_K)
     except DomainError as exc:
         raise _handle_domain_error(exc) from exc
 
@@ -628,4 +632,51 @@ def delete_benchmark_label(dataset_id: str, benchmark_id: str, services: Service
 @compat_router.get("/evaluation/queries")
 def list_evaluation_queries(dataset_id: str = "beir/trec-covid", services: Services = Depends(get_services)):
     items = services.ground_truths.list_by_dataset(dataset_id)
-    return [{"query_id": item.query_id, "query": item.query_text, "ideal_answer": item.ideal_answer} for item in items]
+    return [
+        {"query_id": item.query_id, "query": item.query_text, "ideal_answer": item.ideal_answer}
+        for item in items
+    ]
+
+
+@compat_router.post("/benchmarks/evaluate/start")
+def start_batch_evaluation(
+    req: BatchEvaluateRequest,
+    user_id: int = Depends(get_current_user_id),
+    services: Services = Depends(get_services),
+):
+    snapshot = services.dataset_snapshots.get(req.dataset_id)
+    if not snapshot:
+        raise HTTPException(status_code=400, detail="Dataset not indexed")
+
+    encoders_fitted = (
+        services.index_dataset.classical_encoder.is_fitted
+        and services.index_dataset.quantum_encoder.is_fitted
+        and services.index_dataset.statistical_encoder.is_fitted
+    )
+    if not encoders_fitted:
+        raise HTTPException(status_code=400, detail="Encoders not fitted. Index the dataset first.")
+
+    valid_gts = services.ground_truths.list_by_dataset(req.dataset_id)
+    if not valid_gts:
+        raise HTTPException(status_code=400, detail="No valid queries found")
+
+    current_status = evaluation_job_registry.status
+    if current_status["status"] == "running":
+        return {"accepted": False, "detail": "Evaluation already running", **current_status}
+
+    started = evaluation_job_registry.start(
+        services.evaluate.execute,
+        dataset_id=req.dataset_id,
+        pipelines=req.pipelines,
+        k=FIXED_TOP_K,
+        query_count=len(valid_gts),
+    )
+    return {"accepted": started, **evaluation_job_registry.status}
+
+
+@compat_router.get("/benchmarks/evaluate/status")
+def batch_evaluation_status(
+    user_id: int = Depends(get_current_user_id),
+    services: Services = Depends(get_services),
+):
+    return evaluation_job_registry.status

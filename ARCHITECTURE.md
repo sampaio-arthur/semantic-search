@@ -13,7 +13,7 @@ Clean Architecture com separacao em:
 
 - **Auth**: `SignUpUseCase`, `SignInUseCase`, `RequestPasswordResetUseCase`, `ConfirmPasswordResetUseCase`, `RefreshTokenUseCase`
 - **Chats**: `CreateChatUseCase`, `ListChatsUseCase`, `GetChatUseCase`, `AddMessageUseCase`, `RenameChatUseCase`, `DeleteChatUseCase`
-- **IR**: `IndexDatasetUseCase`, `SearchUseCase`, `UpsertGroundTruthUseCase`, `EvaluateUseCase`
+- **IR**: `IndexDatasetUseCase`, `SearchUseCase`, `UpsertGroundTruthUseCase`, `EvaluateUseCase`, `BuildAssistantRetrievalMessage`
 
 ## Encoders
 
@@ -55,12 +55,12 @@ Os singletons de encoder (`_classical_encoder`, `_quantum_encoder`, `_statistica
 1. **Passo 1**: itera todos os documentos do corpus, coleta textos
 2. **Fit**: encode em lote via SBERT → faz o fit dos tres encoders (ClassicalPipelineEncoder, QuantumPipelineEncoder, StatisticalPipelineEncoder)
 3. **Passo 2**: transforma cada documento com os tres encoders → upsert no banco (lotes de 64 docs)
-4. Persiste queries e qrels (ground truth do split `test`)
-5. Upsert do snapshot de metadados do dataset
+4. Persiste queries e qrels (ground truth do split `test`). Queries excluidas (11 de 50 no BEIR trec-covid) sao filtradas por `is_excluded_query()`, resultando em 39 queries validas
+5. Upsert do snapshot de metadados do dataset (com `query_count=39`)
 
 ## Fluxo de Busca
 
-1. API recebe `query` + `dataset` + `mode` (`classical` | `quantum` | `statistical` | `compare`)
+1. API recebe `query` + `dataset` + `mode` (`classical` | `quantum` | `statistical` | `compare`). O `top_k` e fixado em 25 (`FIXED_TOP_K` em `domain/ir.py`), ignorando qualquer valor enviado pelo cliente
 2. `SearchUseCase` chama `encode()` do(s) encoder(s) correspondente(s)
 3. Repositorio consulta apenas a coluna vetorial correspondente (`embedding_vector`, `quantum_vector` ou `statistical_vector`)
 4. Retorna ranking com score (cosine similarity = 1 - cosine_distance)
@@ -79,9 +79,20 @@ Servico: `AnswerSimilarityService` (`infrastructure/metrics/answer_similarity.py
 - Integrado em busca individual (`_attach_answer_similarity()`) e avaliacao batch (`EvaluateUseCase` → `mean_answer_similarity`)
 - Log emitido: `[SEMANTIC EVAL] query_id=... pipeline=... similarity=...`
 
+## Exclusao de queries
+
+11 queries do BEIR trec-covid sao excluidas por produzirem resultados inconsistentes. A lista esta em `domain/excluded_queries.py` (`EXCLUDED_QUERY_TEXTS`). A filtragem ocorre em dois niveis:
+
+1. **Indexacao**: `IndexDatasetUseCase` pula queries excluidas ao persistir queries/qrels
+2. **Repositorio (SQL)**: `SqlAlchemyGroundTruthRepository.list_by_dataset()` aplica `WHERE query_text NOT IN (...)` — nenhum endpoint ou use case precisa filtrar manualmente
+
+Resultado: apenas 39 queries validas sao usadas em todo o sistema (avaliacao, benchmarks, frontend).
+
 ## Observacoes
 
 - A busca usa PostgreSQL + pgvector com operador `cosine_distance`
 - `score = 1 - cosine_distance(query_vector, doc_vector)`
 - Os pipelines diferem apenas na representacao vetorial, nao no mecanismo de ranking
 - Indexacao assincrona via `index_job_registry` com polling pelo frontend
+- Avaliacao batch assincrona via `evaluation_job_registry` (`infrastructure/api/evaluation_jobs.py`) com polling pelo frontend (`BatchEvaluation.tsx`)
+- `top_k` fixado em 25 via `FIXED_TOP_K` em `domain/ir.py`

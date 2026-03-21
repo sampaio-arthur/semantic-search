@@ -115,3 +115,8 @@ Constraint:
 - Busca por similaridade cosseno: `cosine_distance` do pgvector
 - `score = 1 - cosine_distance(query_vector, doc_vector)`
 - Todos os vetores sao L2-normalizados antes do armazenamento
+
+## Migrations
+
+- `001_add_ideal_answer_to_queries` — Adiciona coluna `ideal_answer TEXT` na tabela `queries`
+- `002_remove_excluded_queries` — Limpeza de dados na tabela `queries` e `qrels`; atualiza `query_count` em `dataset_snapshots`

@@ -3,17 +3,13 @@ import { ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const TOP_K_OPTIONS = [5, 10, 15, 20, 25] as const;
-
 interface ChatInputProps {
-  onSendMessage: (payload: { message: string; topK: number }) => Promise<void> | void;
+  onSendMessage: (payload: { message: string }) => Promise<void> | void;
   isLoading?: boolean;
-  topK: number;
-  onTopKChange: (value: number) => void;
   prefillQuery?: string;
 }
 
-export function ChatInput({ onSendMessage, isLoading, topK, onTopKChange, prefillQuery }: ChatInputProps) {
+export function ChatInput({ onSendMessage, isLoading, prefillQuery }: ChatInputProps) {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -28,7 +24,7 @@ export function ChatInput({ onSendMessage, isLoading, topK, onTopKChange, prefil
     if (!trimmed) return;
 
     setMessage('');
-    await onSendMessage({ message: trimmed, topK });
+    await onSendMessage({ message: trimmed });
   };
 
   return (
@@ -65,4 +61,3 @@ export function ChatInput({ onSendMessage, isLoading, topK, onTopKChange, prefil
     </div>
   );
 }
-

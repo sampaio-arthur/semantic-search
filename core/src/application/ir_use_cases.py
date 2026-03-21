@@ -8,6 +8,7 @@ import numpy as np
 
 from audit import audit_print, category_log, preview_results, preview_text, preview_vector
 from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
+from domain.excluded_queries import is_excluded_query
 from domain.exceptions import NotFoundError, ValidationError
 from domain.ports import (
     DatasetProviderPort,
@@ -223,7 +224,11 @@ class IndexDatasetUseCase:
         # ── Persist queries and qrels ─────────────────────────────────────────
         query_snapshot = []
         qrels_count = 0
+        excluded_count = 0
         for q in self.datasets.iter_queries(dataset_id):
+            if is_excluded_query(str(q["query_text"])):
+                excluded_count += 1
+                continue
             relevant_doc_ids = list(q.get("relevant_doc_ids") or [])
             qrels = {str(doc_id): int(rel) for doc_id, rel in (q.get("qrels") or {}).items()}
             query_snapshot.append(
@@ -252,6 +257,8 @@ class IndexDatasetUseCase:
                     query_text=str(q["query_text"]),
                     qrels=qrels,
                 )
+        if excluded_count > 0:
+            category_log("INDEX", excluded_queries=excluded_count, remaining_queries=len(query_snapshot))
 
         if self.dataset_snapshots is not None:
             subset = dataset_meta.get("subset") or {}
@@ -565,7 +572,7 @@ class EvaluateUseCase:
         self.metrics = metrics
         self.answer_similarity = answer_similarity
 
-    def execute(self, dataset: str, pipeline: str = "compare", k: int = 10) -> dict:
+    def execute(self, dataset: str, pipeline: str = "compare", k: int = 10, progress_callback=None) -> dict:
         gts = self.ground_truths.list_by_dataset(dataset)
         if not gts:
             raise NotFoundError("No ground truth entries found for dataset.")
@@ -576,11 +583,26 @@ class EvaluateUseCase:
             pipelines = [pipeline]
 
         aggregates: list[EvaluationAggregate] = []
+        completed_pipelines: list[str] = []
         for current_pipeline in pipelines:
             per_query: list[EvaluationResult] = []
-            for gt in gts:
-                response = self.search.execute(dataset=dataset, query=gt.query_text, mode=current_pipeline, top_k=k)
+            for i, gt in enumerate(gts):
+                if progress_callback:
+                    progress_callback(
+                        current_query=i + 1,
+                        current_pipeline=current_pipeline,
+                        completed_pipelines=completed_pipelines.copy(),
+                    )
+                try:
+                    response = self.search.execute(dataset=dataset, query=gt.query_text, mode=current_pipeline, top_k=k)
+                except Exception:
+                    category_log("EVALUATE", _extra={"skipped_query_error": gt.query_id, "pipeline": current_pipeline})
+                    continue
                 items = response["results"]
+                metrics_data = response.get("metrics") or {}
+                encode_time = metrics_data.get("encode_time_ms", 0.0)
+                search_time = metrics_data.get("search_time_ms", 0.0)
+                total_time = metrics_data.get("total_time_ms", 0.0)
                 eval_result = self.metrics.evaluate_query(
                     query_id=gt.query_id,
                     query_text=gt.query_text,
@@ -590,28 +612,36 @@ class EvaluateUseCase:
                     relevant_doc_ids=gt.relevant_doc_ids,
                     k=k,
                 )
+                sim = None
                 if gt.ideal_answer and self.answer_similarity is not None:
                     answer_text = " ".join(item.text for item in items[:3])
                     sim = self.answer_similarity.compute(answer_text, gt.ideal_answer)
-                    eval_result = EvaluationResult(
-                        query_id=eval_result.query_id,
-                        query_text=eval_result.query_text,
-                        pipeline=eval_result.pipeline,
-                        precision_at_k=eval_result.precision_at_k,
-                        recall_at_k=eval_result.recall_at_k,
-                        ndcg_at_k=eval_result.ndcg_at_k,
-                        mrr=eval_result.mrr,
-                        top_k_doc_ids=eval_result.top_k_doc_ids,
-                        answer_similarity=sim,
-                    )
                     category_log(
                         "SEMANTIC EVAL",
                         _extra={"query_id": gt.query_id, "pipeline": current_pipeline, "similarity": round(sim, 4)},
                     )
+                eval_result = EvaluationResult(
+                    query_id=eval_result.query_id,
+                    query_text=eval_result.query_text,
+                    pipeline=eval_result.pipeline,
+                    precision_at_k=eval_result.precision_at_k,
+                    recall_at_k=eval_result.recall_at_k,
+                    ndcg_at_k=eval_result.ndcg_at_k,
+                    mrr=eval_result.mrr,
+                    top_k_doc_ids=eval_result.top_k_doc_ids,
+                    answer_similarity=sim,
+                    encode_time_ms=encode_time,
+                    search_time_ms=search_time,
+                    total_time_ms=total_time,
+                )
                 per_query.append(eval_result)
+            completed_pipelines.append(current_pipeline)
             n = max(len(per_query), 1)
             sims = [x.answer_similarity for x in per_query if x.answer_similarity is not None]
             mean_sim = sum(sims) / len(sims) if sims else None
+            encode_times = [x.encode_time_ms for x in per_query if x.encode_time_ms is not None]
+            search_times = [x.search_time_ms for x in per_query if x.search_time_ms is not None]
+            total_times = [x.total_time_ms for x in per_query if x.total_time_ms is not None]
             aggregates.append(
                 EvaluationAggregate(
                     pipeline=current_pipeline,
@@ -622,6 +652,9 @@ class EvaluateUseCase:
                     mean_ndcg_at_k=sum(x.ndcg_at_k for x in per_query) / n,
                     mean_mrr=sum(x.mrr for x in per_query) / n,
                     mean_answer_similarity=mean_sim,
+                    mean_encode_time_ms=sum(encode_times) / len(encode_times) if encode_times else None,
+                    mean_search_time_ms=sum(search_times) / len(search_times) if search_times else None,
+                    mean_total_time_ms=sum(total_times) / len(total_times) if total_times else None,
                 )
             )
 
@@ -636,6 +669,10 @@ class EvaluateUseCase:
                     "mean_ndcg_at_k": agg.mean_ndcg_at_k,
                     "mean_mrr": agg.mean_mrr,
                     "mean_answer_similarity": agg.mean_answer_similarity,
+                    "mean_encode_time_ms": agg.mean_encode_time_ms,
+                    "mean_search_time_ms": agg.mean_search_time_ms,
+                    "mean_total_time_ms": agg.mean_total_time_ms,
+                    "query_count": len(agg.per_query),
                     "per_query": [
                         {
                             "query_id": q.query_id,
@@ -646,6 +683,9 @@ class EvaluateUseCase:
                             "mrr": q.mrr,
                             "top_k_doc_ids": q.top_k_doc_ids,
                             "answer_similarity": q.answer_similarity,
+                            "encode_time_ms": q.encode_time_ms,
+                            "search_time_ms": q.search_time_ms,
+                            "total_time_ms": q.total_time_ms,
                         }
                         for q in agg.per_query
                     ],

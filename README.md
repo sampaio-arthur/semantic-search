@@ -22,7 +22,7 @@ Objetivo da comparacao:
 
 - analisar diferencas de retrieval entre as tres representacoes vetoriais
 - comparar proxies de custo (latencia)
-- permitir avaliacao batch com ground truth (nDCG@k, Recall@k, MRR@k, P@k via `ir_measures`)
+- permitir avaliacao batch com ground truth (nDCG@25, Recall@25, MRR@25, P@25 via `ir_measures`) com dashboard interativo (graficos Recharts)
 
 Inclui:
 
@@ -31,7 +31,7 @@ Inclui:
 - PostgreSQL + pgvector
 - autenticacao JWT
 - chats persistidos
-- cadastro de ground truth e avaliacao batch com metricas IR padrao (nDCG@k, Recall@k, MRR@k, P@k via `ir_measures`)
+- cadastro de ground truth e avaliacao batch com metricas IR padrao (nDCG@25, Recall@25, MRR@25, P@25 via `ir_measures`)
 - avaliacao semantica com `answer_similarity`: similaridade cosseno entre top-3 documentos recuperados e `ideal_answer` via SBERT
 - edicao de `ideal_answer` por query via pagina `EvaluationQueries` no frontend
 
@@ -123,7 +123,7 @@ Servicos:
    - criar conversa
    - garantir indexacao do dataset `beir/trec-covid`
    - executar busca comparativa nos tres pipelines
-   - exibir paineis com encode_time_ms, search_time_ms, total_time_ms, scores e metricas
+   - exibir paineis com encode_time_ms, search_time_ms, total_time_ms, scores e metricas (top_k fixo em 25)
 
 Observacoes:
 

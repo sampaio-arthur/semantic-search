@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, ChevronLeft, LogOut, Trash2, ClipboardList } from 'lucide-react';
+import { Plus, MessageSquare, ChevronLeft, LogOut, Trash2, ClipboardList, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -76,6 +76,14 @@ export function ChatSidebar({
         >
           <ClipboardList className='h-4 w-4' />
           Queries de Avaliação
+        </Button>
+        <Button
+          onClick={() => navigate('/batch-evaluation')}
+          variant='ghost'
+          className='w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent'
+        >
+          <BarChart3 className='h-4 w-4' />
+          Avaliação Batch
         </Button>
       </div>
 

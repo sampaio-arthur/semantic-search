@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 
 
 class UserOut(BaseModel):
@@ -74,19 +74,8 @@ class SearchRequest(BaseModel):
     query: str
     query_id: str | None = None
     mode: str = "compare"
-    top_k: int = 5
+    top_k: int = 25  # Kept for backward compatibility; backend always uses FIXED_TOP_K=25
     chat_id: int | None = None
-
-    @field_validator("top_k")
-    @classmethod
-    def validate_top_k(cls, v: int) -> int:
-        if v < 5:
-            raise ValueError("top_k must be >= 5")
-        if v > 25:
-            raise ValueError("top_k must be <= 25")
-        if v % 5 != 0:
-            raise ValueError("top_k must be multiple of 5")
-        return v
 
 
 class GroundTruthUpsertRequest(BaseModel):
@@ -99,7 +88,12 @@ class GroundTruthUpsertRequest(BaseModel):
 class EvaluateRequest(BaseModel):
     dataset_id: str = "beir/trec-covid"
     pipeline: str = "compare"
-    k: int = 5
+    k: int = 25  # Kept for backward compatibility; backend always uses FIXED_TOP_K=25
+
+
+class BatchEvaluateRequest(BaseModel):
+    dataset_id: str = "beir/trec-covid"
+    pipelines: list[str] = ["classical", "quantum", "statistical"]
 
 
 class BenchmarkLabelInput(BaseModel):

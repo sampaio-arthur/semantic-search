@@ -90,7 +90,7 @@ Estas dependencias aparecem em componentes shadcn gerados e estao no repositorio
 - `react-day-picker`
 - `react-hook-form`
 - `react-resizable-panels`
-- `recharts`
+- `recharts` (**usado ativamente** em `BatchEvaluation.tsx` para graficos de metricas e latencia)
 - `vaul`
 - `zod`
 - `date-fns`

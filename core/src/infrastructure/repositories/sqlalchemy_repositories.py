@@ -318,9 +318,15 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
         return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer)
 
     def list_by_dataset(self, dataset: str) -> list[GroundTruth]:
+        from domain.excluded_queries import EXCLUDED_QUERY_TEXTS
+
         rows = self.session.scalars(
             select(QueryModel)
-            .where(QueryModel.dataset == dataset, QueryModel.split == "test")
+            .where(
+                QueryModel.dataset == dataset,
+                QueryModel.split == "test",
+                QueryModel.query_text.notin_(EXCLUDED_QUERY_TEXTS),
+            )
             .order_by(QueryModel.id.asc())
         ).all()
         items: list[GroundTruth] = []
