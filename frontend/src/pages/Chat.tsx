@@ -198,7 +198,7 @@ export default function Chat() {
 
         <div className="flex-1 min-h-0 overflow-y-auto">
           {messages.length === 0 && !isLoading ? (
-            <WelcomeScreen />
+            <WelcomeScreen onQueryClick={(q) => void handleSendMessage({ message: q })} />
           ) : (
             <MessageList messages={messages} isLoading={isLoading} />
           )}
