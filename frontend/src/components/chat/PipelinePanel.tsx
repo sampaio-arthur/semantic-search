@@ -1,59 +1,77 @@
-import { SearchAlgorithmDetails, SearchResponse } from '@/lib/api';
+import { Clock, FileText } from 'lucide-react';
+import { SearchResponse } from '@/lib/api';
 
 interface PipelinePanelProps {
   response: SearchResponse | null;
 }
 
-function AlgoLine({ label, details }: { label: string; details?: SearchAlgorithmDetails }) {
-  return (
-    <div className='rounded-lg border border-border bg-card px-3 py-2 text-xs'>
-      <div className='text-muted-foreground'>{label}</div>
-      <div className='mt-1 text-foreground'>
-        {details ? details.comparator + ' | ' + details.candidate_strategy : 'Sem detalhes de algoritmo'}
-      </div>
-    </div>
-  );
-}
-
 export function PipelinePanel({ response }: PipelinePanelProps) {
   if (!response?.comparison) return null;
 
-  const classicalCount = response.comparison.classical.results?.length ?? 0;
-  const quantumCount = response.comparison.quantum.results?.length ?? 0;
-  const statisticalCount = response.comparison.statistical?.results?.length ?? 0;
-  const classicalLatency = response.comparison.classical.metrics?.total_time_ms;
-  const quantumLatency = response.comparison.quantum.metrics?.total_time_ms;
-  const statisticalLatency = response.comparison.statistical?.metrics?.total_time_ms;
-  const hasStatistical = Boolean(response.comparison.statistical);
+  const pipelines = [
+    {
+      name: 'Clássico',
+      color: 'text-blue-400',
+      border: 'border-blue-400/30',
+      count: response.comparison.classical.results?.length ?? 0,
+      latency: response.comparison.classical.metrics?.total_time_ms,
+      encode: response.comparison.classical.metrics?.encode_time_ms,
+      search: response.comparison.classical.metrics?.search_time_ms,
+    },
+    {
+      name: 'Quântico',
+      color: 'text-purple-400',
+      border: 'border-purple-400/30',
+      count: response.comparison.quantum.results?.length ?? 0,
+      latency: response.comparison.quantum.metrics?.total_time_ms,
+      encode: response.comparison.quantum.metrics?.encode_time_ms,
+      search: response.comparison.quantum.metrics?.search_time_ms,
+    },
+    ...(response.comparison.statistical
+      ? [
+          {
+            name: 'Estatístico',
+            color: 'text-amber-400',
+            border: 'border-amber-400/30',
+            count: response.comparison.statistical.results?.length ?? 0,
+            latency: response.comparison.statistical.metrics?.total_time_ms,
+            encode: response.comparison.statistical.metrics?.encode_time_ms,
+            search: response.comparison.statistical.metrics?.search_time_ms,
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className='w-full max-w-3xl mx-auto px-4 pb-4'>
-      <div className='rounded-2xl border border-border bg-background/80 p-4 space-y-4'>
-        <div>
-          <p className='text-sm font-semibold'>Pipeline de Retrieval</p>
-          <p className='text-xs text-muted-foreground'>Comparação de acurácia e velocidade no BEIR. Comparação justa: mesma base semântica (BERT), mesma métrica (cosine similarity); a diferença está na transformação vetorial aplicada.</p>
-        </div>
-
-        <div className='grid gap-2'>
-          <AlgoLine label='Fluxo clássico' details={response.comparison.classical.algorithm_details} />
-          <AlgoLine label='Fluxo quântico' details={response.comparison.quantum.algorithm_details} />
-          {hasStatistical && (
-            <AlgoLine label='Fluxo estatístico' details={response.comparison.statistical?.algorithm_details} />
-          )}
-        </div>
-
-        <div className='grid gap-2'>
-          <div className='rounded-lg border border-border bg-card px-3 py-2 text-xs'>
-            <div className='text-muted-foreground'>Resumo da recuperação</div>
-            <div className='mt-1 text-foreground'>
-              Clássico: {classicalCount} docs | Quântico: {quantumCount} docs{hasStatistical ? ` | Estatístico: ${statisticalCount} docs` : ''}
-            </div>
-            {(classicalLatency !== undefined && quantumLatency !== undefined) && (
-              <div className='mt-1 text-muted-foreground'>
-                Latência: clássico {classicalLatency.toFixed(1)} ms | quântico {quantumLatency.toFixed(1)} ms{statisticalLatency !== undefined ? ` | estatístico ${statisticalLatency.toFixed(1)} ms` : ''}
+    <div className="w-full max-w-3xl mx-auto px-4 pb-4">
+      <div className="rounded-2xl border border-border bg-background/80 p-4">
+        <p className="text-sm font-semibold mb-3">Recuperação por Pipeline</p>
+        <div className="grid grid-cols-3 gap-3">
+          {pipelines.map((p) => (
+            <div
+              key={p.name}
+              className={`rounded-lg border ${p.border} bg-card px-3 py-3 space-y-2`}
+            >
+              <p className={`text-xs font-semibold ${p.color}`}>{p.name}</p>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <FileText className="h-3 w-3" />
+                <span>{p.count} docs</span>
               </div>
-            )}
-          </div>
+              {p.latency !== undefined && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span>{p.latency.toFixed(1)} ms</span>
+                </div>
+              )}
+              {(p.encode !== undefined || p.search !== undefined) && (
+                <div className="text-[10px] text-muted-foreground/70 pl-[18px]">
+                  {p.encode !== undefined && <span>enc {p.encode.toFixed(1)}</span>}
+                  {p.encode !== undefined && p.search !== undefined && <span> · </span>}
+                  {p.search !== undefined && <span>busca {p.search.toFixed(1)}</span>}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>
