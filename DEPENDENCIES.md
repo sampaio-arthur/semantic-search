@@ -20,7 +20,7 @@ Este arquivo descreve as dependencias declaradas no projeto e o uso real no codi
 | `bcrypt` | backend do `passlib` | Algoritmo de hash efetivo |
 | `python-multipart` | `core/src/infrastructure/api/routers/api_router.py` | Necessario para `OAuth2PasswordRequestForm` |
 | `numpy` | `core/src/infrastructure/encoders/quantum.py`, `core/src/infrastructure/encoders/statistical.py` | Vetores/arrays, operacoes matriciais nos encoders |
-| `scipy` | `core/src/infrastructure/encoders/statistical.py` | `TruncatedSVD` via `sklearn` usa scipy internamente; presente como dependencia direta |
+| `scipy` | dependencia transitiva de `scikit-learn` | `TruncatedSVD` usa scipy internamente; pinada em `requirements.txt` para garantir reproducibilidade |
 | `scikit-learn` | `core/src/infrastructure/encoders/classical.py`, `core/src/infrastructure/encoders/quantum.py`, `core/src/infrastructure/encoders/statistical.py` | `PCA` e `TruncatedSVD` usados nos tres pipelines; `joblib` (dependencia transitiva do sklearn) usado para serializar/deserializar estado fitted em disco |
 | `pgvector` | `core/src/infrastructure/db/models.py` | Tipo vetorial no PostgreSQL (`pgvector.sqlalchemy.Vector`) |
 | `sentence-transformers` | `core/src/infrastructure/encoders/base.py` (`SharedSbertBase`) | Modelo SBERT compartilhado pelos tres encoders (`all-MiniLM-L6-v2`) |
