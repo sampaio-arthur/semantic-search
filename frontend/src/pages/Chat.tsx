@@ -196,7 +196,7 @@ export default function Chat() {
           <span className="ml-auto text-xs text-muted-foreground">Top 25</span>
         </header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className={`flex-1 min-h-0 overflow-y-auto ${messages.length === 0 && !isLoading ? 'flex flex-col' : ''}`}>
           {messages.length === 0 && !isLoading ? (
             <WelcomeScreen onQueryClick={(q) => void handleSendMessage({ message: q })} />
           ) : (
