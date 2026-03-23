@@ -6,15 +6,17 @@ services:
       - .env
     volumes:
       - ./core:/app
-      - model_cache:/models
+      - hf_cache:/root/.cache/huggingface
+      - st_cache:/root/.cache/torch/sentence_transformers
     environment:
       - PYTHONUNBUFFERED=1
-      - MODEL_CACHE_DIR=/models
+      - HF_HOME=/root/.cache/huggingface
+      - SENTENCE_TRANSFORMERS_HOME=/root/.cache/torch/sentence_transformers
     ports:
       - "8000:8000"
     depends_on:
       - db
-    command: sh -lc "python download_models.py && uvicorn infrastructure.api.fastapi_app:app --host 0.0.0.0 --port 8000 --app-dir src"
+    command: uvicorn infrastructure.api.fastapi_app:app --host 0.0.0.0 --port 8000 --app-dir src
 
   frontend:
     build: ./frontend
@@ -30,19 +32,19 @@ services:
       - core
 
   db:
-    image: mysql:8.0
-    container_name: quantum_search_mysql
+    image: pgvector/pgvector:pg16
+    container_name: quantum_search_postgres
     restart: unless-stopped
     environment:
-      - MYSQL_DATABASE=tcc
-      - MYSQL_USER=tcc
-      - MYSQL_PASSWORD=tcc
-      - MYSQL_ROOT_PASSWORD=tccroot
+      - POSTGRES_DB=${DB_NAME:-tcc}
+      - POSTGRES_USER=${DB_USER:-tcc}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-tcc}
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - pg_data:/var/lib/postgresql/data
 
 volumes:
-  mysql_data:
-  model_cache:
+  pg_data:
+  hf_cache:
+  st_cache:

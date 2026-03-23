@@ -1,67 +1,55 @@
-import { SearchMetrics, SearchResponse } from '@/lib/api';
+import { SearchResponse } from '@/lib/api';
 
 interface ComparisonPanelProps {
   response: SearchResponse | null;
 }
 
-function formatPercent(value?: number | null) {
-  if (value === undefined || value === null) return '-';
-  return `${(value * 100).toFixed(1)}%`;
+function metricNumber(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function formatMs(value?: number | null) {
-  if (value === undefined || value === null) return '-';
-  return `${value.toFixed(1)} ms`;
-}
+function MetricBar({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-muted-foreground">—</span>;
 
-function MetricBars({ label, classical, quantum }: { label: string; classical?: number | null; quantum?: number | null }) {
-  const classicalWidth = classical ? Math.max(0, Math.min(1, classical)) * 100 : 0;
-  const quantumWidth = quantum ? Math.max(0, Math.min(1, quantum)) * 100 : 0;
+  const percent = Math.max(0, Math.min(100, value * 100));
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{label}</span>
-        <span>{formatPercent(classical)} | {formatPercent(quantum)}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full bg-emerald-400" style={{ width: `${classicalWidth}%` }} />
-        </div>
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full bg-sky-400" style={{ width: `${quantumWidth}%` }} />
-        </div>
+    <div className="min-w-[80px]">
+      <div className="text-foreground font-medium">{value.toFixed(3)}</div>
+      <div className="mt-1 h-1.5 w-full rounded-full bg-muted">
+        <div
+          className="h-1.5 rounded-full bg-emerald-500 transition-all"
+          style={{ width: `${percent.toFixed(1)}%` }}
+        />
       </div>
     </div>
   );
 }
 
-function MetricsSummary({ title, metrics }: { title: string; metrics?: SearchMetrics }) {
-  if (!metrics) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground mt-2">Sem metricas disponiveis.</p>
-      </div>
-    );
-  }
+interface MetricRowProps {
+  label: string;
+  classical: number | null;
+  quantum: number | null;
+  statistical: number | null;
+  hasStatistical: boolean;
+}
 
+function MetricRow({ label, classical, quantum, statistical, hasStatistical }: MetricRowProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-      <p className="text-sm font-medium">{title}</p>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>Latencia</span>
-        <span>{formatMs(metrics.latency_ms)}</span>
-      </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>K</span>
-        <span>{metrics.k}</span>
-      </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>Candidatos</span>
-        <span>{metrics.candidate_k}</span>
-      </div>
-    </div>
+    <tr className="border-b border-border/40 last:border-0">
+      <td className="py-2.5 pr-3 text-foreground font-medium">{label}</td>
+      <td className="py-2.5 pr-3">
+        <MetricBar value={classical} />
+      </td>
+      <td className="py-2.5 pr-3">
+        <MetricBar value={quantum} />
+      </td>
+      {hasStatistical && (
+        <td className="py-2.5 pr-3">
+          <MetricBar value={statistical} />
+        </td>
+      )}
+    </tr>
   );
 }
 
@@ -69,54 +57,101 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
   if (!response) return null;
 
   const comparison = response.comparison;
-  const showComparison = Boolean(comparison);
-  const classicalMetrics = comparison?.classical.metrics ?? response.metrics;
-  const quantumMetrics = comparison?.quantum.metrics;
-  const hasLabels = Boolean(classicalMetrics?.has_labels || quantumMetrics?.has_labels);
+  if (!comparison) return null;
+
+  const classicalMetrics = comparison.classical.metrics;
+  const quantumMetrics = comparison.quantum.metrics;
+  const statisticalMetrics = comparison.statistical?.metrics;
+  const hasStatistical = Boolean(comparison.statistical);
+
+  const hasIrLabels = Boolean(
+    classicalMetrics?.has_labels || quantumMetrics?.has_labels || statisticalMetrics?.has_labels
+  );
+  const hasIdealAnswer = Boolean(
+    classicalMetrics?.has_ideal_answer ||
+      quantumMetrics?.has_ideal_answer ||
+      statisticalMetrics?.has_ideal_answer
+  );
+
+  const metrics = [
+    {
+      label: 'P@25',
+      c: metricNumber(classicalMetrics?.precision_at_k),
+      q: metricNumber(quantumMetrics?.precision_at_k),
+      s: metricNumber(statisticalMetrics?.precision_at_k),
+    },
+    {
+      label: 'Recall@25',
+      c: metricNumber(classicalMetrics?.recall_at_k),
+      q: metricNumber(quantumMetrics?.recall_at_k),
+      s: metricNumber(statisticalMetrics?.recall_at_k),
+    },
+    {
+      label: 'nDCG@25',
+      c: metricNumber(classicalMetrics?.ndcg_at_k),
+      q: metricNumber(quantumMetrics?.ndcg_at_k),
+      s: metricNumber(statisticalMetrics?.ndcg_at_k),
+    },
+    {
+      label: 'MRR@25',
+      c: metricNumber((classicalMetrics as Record<string, unknown>)?.mrr as number | null),
+      q: metricNumber((quantumMetrics as Record<string, unknown>)?.mrr as number | null),
+      s: metricNumber((statisticalMetrics as Record<string, unknown>)?.mrr as number | null),
+    },
+    {
+      label: 'Answer Similarity',
+      c: metricNumber(classicalMetrics?.answer_similarity),
+      q: metricNumber(quantumMetrics?.answer_similarity),
+      s: metricNumber(statisticalMetrics?.answer_similarity),
+    },
+  ];
+
+  const allNull = metrics.every((m) => m.c === null && m.q === null && m.s === null);
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 pb-6">
-      <div className="rounded-2xl border border-border bg-background/80 p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold">Comparacao de Busca</p>
-            <p className="text-xs text-muted-foreground">Classico vs Quantico (PennyLane)</p>
-          </div>
-          <span className="text-xs text-muted-foreground">Modo: {response.mode}</span>
+      <div className="rounded-2xl border border-border bg-background/80 p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Métricas de Qualidade</p>
+          <p className="text-xs text-muted-foreground">
+            {hasIrLabels
+              ? 'Calculado com gabarito (qrels) do BEIR.'
+              : 'Sem gabarito para esta query — use queries do BEIR para ver métricas IR.'}
+          </p>
         </div>
 
-        {showComparison ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            <MetricsSummary title="Classico" metrics={comparison?.classical.metrics} />
-            <MetricsSummary title="Quantico" metrics={comparison?.quantum.metrics} />
+        {!allNull && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border">
+                  <th className="py-2 pr-3">Métrica</th>
+                  <th className="py-2 pr-3 text-blue-400">Clássico</th>
+                  <th className="py-2 pr-3 text-purple-400">Quântico</th>
+                  {hasStatistical && (
+                    <th className="py-2 pr-3 text-amber-400">Estatístico</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.map((m) => (
+                  <MetricRow
+                    key={m.label}
+                    label={m.label}
+                    classical={m.c}
+                    quantum={m.q}
+                    statistical={m.s}
+                    hasStatistical={hasStatistical}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <MetricsSummary title="Resultado" metrics={response.metrics} />
         )}
 
-        {showComparison && hasLabels && (
-          <div className="space-y-4">
-            <MetricBars
-              label={`Recall@${comparison?.classical.metrics?.k ?? classicalMetrics?.k ?? 5}`}
-              classical={comparison?.classical.metrics?.recall_at_k}
-              quantum={comparison?.quantum.metrics?.recall_at_k}
-            />
-            <MetricBars
-              label="MRR"
-              classical={comparison?.classical.metrics?.mrr}
-              quantum={comparison?.quantum.metrics?.mrr}
-            />
-            <MetricBars
-              label={`NDCG@${comparison?.classical.metrics?.k ?? classicalMetrics?.k ?? 5}`}
-              classical={comparison?.classical.metrics?.ndcg_at_k}
-              quantum={comparison?.quantum.metrics?.ndcg_at_k}
-            />
-          </div>
-        )}
-
-        {showComparison && !hasLabels && (
-          <p className="text-xs text-muted-foreground">
-            As metricas de ranking aparecem apenas quando a consulta possui rotulos de relevancia.
+        {hasIdealAnswer && (
+          <p className="text-[10px] text-muted-foreground">
+            Answer Similarity: similaridade semântica (cosseno) entre top-3 docs recuperados e a resposta ideal.
           </p>
         )}
       </div>

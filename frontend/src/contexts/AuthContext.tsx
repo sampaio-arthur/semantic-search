@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       api.getMe()
         .then(setUser)
         .catch(() => {
-          localStorage.removeItem('access_token');
+          api.logout();
         })
         .finally(() => setIsLoading(false));
     } else {

@@ -5,12 +5,11 @@ setup:
 up:
 	docker compose up -d
 
-create-structure:
-	mkdir -p core/src/domain/entities core/src/domain/services core/src/application/use_cases core/src/infrastructure/quantum
-	touch core/src/main.py
+build:
+	docker compose build
 
-run:
-	docker compose exec core python src/main.py
+restart:
+	docker compose restart
 
 test:
 	docker compose exec core pytest

@@ -1,7 +1,8 @@
-﻿import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { MessageList } from '@/components/chat/MessageList';
@@ -9,21 +10,26 @@ import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ComparisonPanel } from '@/components/chat/ComparisonPanel';
 import { PipelinePanel } from '@/components/chat/PipelinePanel';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, Conversation, Message, SearchResponse } from '@/lib/api';
+import { api, Conversation, DatasetIndexStatus, Message, SearchResponse } from '@/lib/api';
+
+const DEFAULT_DATASET_ID = 'beir/trec-covid';
 
 export default function Chat() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [indexStatus, setIndexStatus] = useState<DatasetIndexStatus | null>(null);
+  const [prefillQuery, setPrefillQuery] = useState(searchParams.get('q') ?? '');
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
 
-  const responseCacheKey = (id: number) => `qs:lastResponse:${id}`;
+  const responseCacheKey = (id: number) => `qs:lastResponse:v2:${id}`;
 
   const loadCachedResponse = (id: number): SearchResponse | null => {
     const raw = localStorage.getItem(responseCacheKey(id));
@@ -44,14 +50,12 @@ export default function Chat() {
     localStorage.removeItem(responseCacheKey(id));
   };
 
-  // Redirect to auth if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
     }
   }, [user, authLoading, navigate]);
 
-  // Load conversations
   useEffect(() => {
     if (user) {
       loadConversations();
@@ -99,75 +103,58 @@ export default function Chat() {
     }
   };
 
-  const buildAssistantContent = (searchResponse: SearchResponse) => {
-    let assistantContent = '';
+  const handleSendMessage = async (payload: { message: string }) => {
+    const userText = payload.message.trim();
+    if (!userText) return;
+    setPrefillQuery('');
 
-    if (searchResponse.results.length > 0) {
-      assistantContent += 'Resultados:\n';
-      searchResponse.results.slice(0, 3).forEach((result, index) => {
-        assistantContent += `**${index + 1}.** ${result.text}\n(Relevancia: ${(result.score * 100).toFixed(1)}%)\n\n`;
-      });
-    } else {
-      assistantContent = 'Nao encontrei resultados relevantes para sua busca.';
-    }
-
-    if (searchResponse.comparison) {
-      const classical = searchResponse.comparison.classical.metrics;
-      const quantum = searchResponse.comparison.quantum.metrics;
-      if (classical && quantum && classical.has_labels) {
-        assistantContent += '\nResumo de comparacao (metrics):\n';
-        assistantContent += `Classico - Recall@${classical.k}: ${(classical.recall_at_k ?? 0) * 100}% | MRR: ${(classical.mrr ?? 0) * 100}%\n`;
-        assistantContent += `Quantico - Recall@${quantum.k}: ${(quantum.recall_at_k ?? 0) * 100}% | MRR: ${(quantum.mrr ?? 0) * 100}%\n`;
-      }
-    }
-
-    return assistantContent.trim();
-  };
-
-  const handleSendMessage = async (filename: string, file: File) => {
     setIsLoading(true);
 
     try {
       let conversationId = activeConversationId;
 
       if (!conversationId) {
-        const newConversation = await api.createConversation(filename);
+        const title = userText || 'Nova consulta';
+        const newConversation = await api.createConversation(title);
         conversationId = newConversation.id;
         setActiveConversationId(conversationId);
-        setConversations(prev => [newConversation, ...prev]);
+        setConversations((prev) => [newConversation, ...prev]);
       }
 
-      const userMessage = await api.addMessage(conversationId, 'user', filename);
-      setMessages(prev => [...prev, userMessage]);
+      const userMessage = await api.addMessage(conversationId, 'user', userText || 'Consulta');
+      setMessages((prev) => [...prev, userMessage]);
 
-      const searchResponse = await api.searchWithFile(filename, file, { mode: 'compare' });
+      await api.indexDataset(DEFAULT_DATASET_ID, false, (status) => {
+        setIndexStatus(status.status === 'running' ? status : null);
+      });
+      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
 
       setLastResponse(searchResponse);
       if (conversationId) {
         saveCachedResponse(conversationId, searchResponse);
       }
-
-      const assistantContent = buildAssistantContent(searchResponse);
-
-      if (assistantContent.length > 0) {
-        const assistantMessage = await api.addMessage(conversationId, 'assistant', assistantContent);
-        setMessages(prev => [...prev, assistantMessage]);
-      }
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(prev => [
+      setIndexStatus(null);
+      const detail = error instanceof Error ? error.message : 'Erro desconhecido';
+      setMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
           role: 'assistant',
-          content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.',
+          content: `Não foi possível consultar o dataset. ${detail}`,
           created_at: new Date().toISOString(),
         },
       ]);
     } finally {
+      setIndexStatus(null);
       setIsLoading(false);
     }
   };
+
+  const indexProgressValue = indexStatus?.total_hint && indexStatus.total_hint > 0
+    ? Math.min(100, Math.round(((indexStatus.indexed_count ?? 0) / indexStatus.total_hint) * 100))
+    : 0;
 
   if (authLoading) {
     return (
@@ -183,7 +170,6 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Sidebar */}
       <ChatSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -194,9 +180,7 @@ export default function Chat() {
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Header */}
         <header className="h-14 flex items-center px-4 border-b border-border">
           {isSidebarCollapsed && (
             <Button
@@ -209,31 +193,46 @@ export default function Chat() {
             </Button>
           )}
           <h1 className="text-lg font-medium">Quantum Search</h1>
+          <span className="ml-auto text-xs text-muted-foreground">Top 25</span>
         </header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {/* Messages or Welcome */}
+        <div className={`flex-1 min-h-0 overflow-y-auto ${messages.length === 0 && !isLoading ? 'flex flex-col' : ''}`}>
           {messages.length === 0 && !isLoading ? (
-            <WelcomeScreen />
+            <WelcomeScreen onQueryClick={(q) => void handleSendMessage({ message: q })} />
           ) : (
             <MessageList messages={messages} isLoading={isLoading} />
           )}
 
-          {/* Pipeline */}
-          <PipelinePanel visible={Boolean(lastResponse)} />
-
-          {/* Comparison Panel */}
+          <PipelinePanel response={lastResponse} />
           <ComparisonPanel response={lastResponse} />
         </div>
 
-        {/* Input */}
         <div className="pb-6 pt-2">
+          {indexStatus?.status === 'running' && (
+            <div className="px-4 pb-3">
+              <div className="rounded-lg border border-border bg-card px-4 py-3">
+                <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium text-foreground">Indexando dataset</span>
+                  <span className="text-muted-foreground">
+                    {indexStatus.indexed_count ?? 0}
+                    {indexStatus.total_hint ? ` / ${indexStatus.total_hint}` : ''}
+                  </span>
+                </div>
+                <Progress value={indexProgressValue} />
+              </div>
+            </div>
+          )}
           <ChatInput
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
+            prefillQuery={prefillQuery}
           />
         </div>
       </main>
     </div>
   );
 }
+
+
+
+

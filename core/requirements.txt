@@ -1,47 +1,21 @@
-﻿# --- Core Quantum SDK (IBM) ---
-qiskit>=1.0.0
-qiskit-aer>=0.14.0
-
-# --- Quantum Machine Learning (Framework de Alto NÃ­vel) ---
-pennylane>=0.35.0
-pennylane-qiskit>=0.35.0
-
-# --- InteligÃªncia Artificial & Embeddings ---
-# NecessÃ¡rio para transformar texto em vetores para busca semÃ¢ntica
-sentence-transformers>=2.5.0
-scikit-learn>=1.4.0
-
-# --- MatemÃ¡tica e CiÃªncia de Dados ---
-numpy>=1.26.0
-scipy>=1.12.0
-pandas>=2.2.0
-
-# --- VisualizaÃ§Ã£o e GrÃ¡ficos ---
-matplotlib>=3.8.0
-pylatexenc>=2.10
-seaborn>=0.13.0
-
-# --- UtilitÃ¡rios ---
-# Para Clean Architecture e InjeÃ§Ã£o de DependÃªncia (opcional, mas recomendado para Java Devs)
-dependency-injector>=4.41.0
-# --- API ---
-fastapi>=0.110.0
-uvicorn>=0.27.0
-python-multipart>=0.0.9
-pypdf>=4.0.0
-
-# --- Tests ---
-pytest>=8.0.0
-
-
-# --- Test HTTP ---
-httpx>=0.27.0
-
-
-# --- Auth + Database ---
-SQLAlchemy>=2.0.0
-PyMySQL>=1.1.0
-python-jose>=3.3.0
-passlib[bcrypt]>=1.7.4
-email-validator>=2.1.0
-bcrypt==3.2.2
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+alembic==1.14.0
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.20
+numpy==2.0.2
+scipy==1.14.1
+scikit-learn==1.5.2
+pgvector==0.3.6
+sentence-transformers==3.3.1
+pennylane==0.39.0
+autoray==0.6.12
+httpx==0.28.1
+ir-measures==0.3.7
+pytest==8.3.4
