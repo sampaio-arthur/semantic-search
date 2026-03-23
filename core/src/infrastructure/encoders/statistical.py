@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 from sklearn.decomposition import PCA, TruncatedSVD  # type: ignore
 
@@ -43,6 +45,7 @@ class StatisticalPipelineEncoder:
         self._pca: PCA | None = None
         self._svd: TruncatedSVD | None = None
         self.is_fitted: bool = False
+        self._lock = threading.RLock()
 
     def fit(self, raw_embeddings: np.ndarray) -> None:
         """Fit PCA then TruncatedSVD on corpus raw SBERT embeddings. Shape: [N, base_dim]."""
@@ -54,9 +57,10 @@ class StatisticalPipelineEncoder:
             svd_output_dim=self.dim,
         )
         # Step 1: PCA to center and reduce to intermediate dimensionality
-        self._pca = PCA(n_components=self.pca_intermediate_dim, random_state=self.seed)
-        pca_out = self._pca.fit_transform(raw_embeddings)
-        pca_explained = float(np.sum(self._pca.explained_variance_ratio_))
+        # Fit outside the lock; only the state swap is atomic.
+        pca = PCA(n_components=self.pca_intermediate_dim, random_state=self.seed)
+        pca_out = pca.fit_transform(raw_embeddings)
+        pca_explained = float(np.sum(pca.explained_variance_ratio_))
         audit_print(
             "encoder.statistical.fit.pca_completed",
             pca_intermediate_dim=self.pca_intermediate_dim,
@@ -65,10 +69,13 @@ class StatisticalPipelineEncoder:
         category_log("PCA", input_dim=raw_embeddings.shape[1], output_dim=self.pca_intermediate_dim, pipeline="statistical")
 
         # Step 2: TruncatedSVD on PCA-transformed data for final factorization
-        self._svd = TruncatedSVD(n_components=self.dim, random_state=self.seed)
-        self._svd.fit(pca_out)
-        svd_explained = float(np.sum(self._svd.explained_variance_ratio_))
-        self.is_fitted = True
+        svd = TruncatedSVD(n_components=self.dim, random_state=self.seed)
+        svd.fit(pca_out)
+        svd_explained = float(np.sum(svd.explained_variance_ratio_))
+        with self._lock:
+            self._pca = pca
+            self._svd = svd
+            self.is_fitted = True
         audit_print(
             "encoder.statistical.fit.completed",
             pca_intermediate_dim=self.pca_intermediate_dim,
@@ -78,12 +85,14 @@ class StatisticalPipelineEncoder:
 
     def transform(self, raw_embedding: np.ndarray) -> list[float]:
         """Apply PCA → TruncatedSVD → L2 normalize to a single raw embedding."""
-        if not self.is_fitted or self._pca is None or self._svd is None:
+        with self._lock:
+            pca, svd, is_fitted = self._pca, self._svd, self.is_fitted
+        if not is_fitted or pca is None or svd is None:
             raise ValidationError(
                 "[PIPELINE statistical] Encoder not fitted. Index a dataset first."
             )
-        pca_out = self._pca.transform(raw_embedding.reshape(1, -1))
-        svd_out = self._svd.transform(pca_out)[0]
+        pca_out = pca.transform(raw_embedding.reshape(1, -1))
+        svd_out = svd.transform(pca_out)[0]
         return l2_normalize(svd_out.tolist())
 
     def encode(self, text: str) -> list[float]:
@@ -126,9 +135,10 @@ class StatisticalPipelineEncoder:
         if not os.path.exists(path):
             return False
         state = joblib.load(path)
-        self._pca = state["pca"]
-        self._svd = state["svd"]
-        self.is_fitted = True
+        with self._lock:
+            self._pca = state["pca"]
+            self._svd = state["svd"]
+            self.is_fitted = True
         audit_print("encoder.statistical.load_state", path=path)
         return True
 

@@ -96,6 +96,12 @@ class Settings(BaseSettings):
                 f"quantum_n_qubits={self.quantum_n_qubits} inconsistent with vector_dim={self.vector_dim}. "
                 f"Require 2^quantum_n_qubits == vector_dim."
             )
+        if self.pca_intermediate_dim <= self.vector_dim:
+            raise ValueError(
+                f"pca_intermediate_dim={self.pca_intermediate_dim} must be greater than vector_dim={self.vector_dim}. "
+                f"If equal or smaller, TruncatedSVD degenerates to a full orthogonal rotation, "
+                f"making the statistical pipeline identical to classical under cosine similarity."
+            )
 
 
 @lru_cache

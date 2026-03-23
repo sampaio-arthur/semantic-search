@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+import traceback
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -24,12 +24,6 @@ if TYPE_CHECKING:
     from infrastructure.encoders.classical import ClassicalPipelineEncoder
     from infrastructure.encoders.quantum import QuantumPipelineEncoder
     from infrastructure.encoders.statistical import StatisticalPipelineEncoder
-
-
-@dataclass(slots=True)
-class SearchPipelineResponse:
-    results: list
-    pipeline: str
 
 
 class IndexDatasetUseCase:
@@ -440,10 +434,8 @@ class SearchUseCase:
     def _search_metrics(self, results, encode_time_ms: float, search_time_ms: float, total_time_ms: float, top_k: int) -> dict:
         scores = [float(x.score) for x in results]
         return {
-            "accuracy_at_k": None,
             "precision_at_k": None,
             "recall_at_k": None,
-            "f1_at_k": None,
             "mrr": None,
             "ndcg_at_k": None,
             "answer_similarity": None,
@@ -596,8 +588,10 @@ class EvaluateUseCase:
 
         aggregates: list[EvaluationAggregate] = []
         completed_pipelines: list[str] = []
+        error_counts: dict[str, int] = {}
         for current_pipeline in pipelines:
             per_query: list[EvaluationResult] = []
+            error_count = 0
             for i, gt in enumerate(gts):
                 if progress_callback:
                     progress_callback(
@@ -607,8 +601,17 @@ class EvaluateUseCase:
                     )
                 try:
                     response = self.search.execute(dataset=dataset, query=gt.query_text, mode=current_pipeline, top_k=k)
-                except Exception:
-                    category_log("EVALUATE", _extra={"skipped_query_error": gt.query_id, "pipeline": current_pipeline})
+                except Exception as exc:
+                    error_count += 1
+                    category_log(
+                        "EVALUATE",
+                        _extra={
+                            "skipped_query_error": gt.query_id,
+                            "pipeline": current_pipeline,
+                            "error": str(exc),
+                            "traceback": traceback.format_exc(),
+                        },
+                    )
                     continue
                 items = response["results"]
                 metrics_data = response.get("metrics") or {}
@@ -647,6 +650,7 @@ class EvaluateUseCase:
                     total_time_ms=total_time,
                 )
                 per_query.append(eval_result)
+            error_counts[current_pipeline] = error_count
             completed_pipelines.append(current_pipeline)
             n = max(len(per_query), 1)
             sims = [x.answer_similarity for x in per_query if x.answer_similarity is not None]
@@ -685,6 +689,7 @@ class EvaluateUseCase:
                     "mean_search_time_ms": agg.mean_search_time_ms,
                     "mean_total_time_ms": agg.mean_total_time_ms,
                     "query_count": len(agg.per_query),
+                    "error_count": error_counts.get(agg.pipeline, 0),
                     "per_query": [
                         {
                             "query_id": q.query_id,

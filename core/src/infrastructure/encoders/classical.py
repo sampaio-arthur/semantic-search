@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import numpy as np
@@ -30,6 +31,7 @@ class ClassicalPipelineEncoder:
         self.seed = seed
         self._pca: PCA | None = None
         self.is_fitted: bool = False
+        self._lock = threading.RLock()
 
     def fit(self, raw_embeddings: np.ndarray) -> None:
         """Fit PCA on corpus raw SBERT embeddings. Shape: [N, base_dim]."""
@@ -39,10 +41,13 @@ class ClassicalPipelineEncoder:
             input_dim=raw_embeddings.shape[1],
             output_dim=self.dim,
         )
-        self._pca = PCA(n_components=self.dim, random_state=self.seed)
-        self._pca.fit(raw_embeddings)
-        self.is_fitted = True
-        explained = float(np.sum(self._pca.explained_variance_ratio_))
+        # Fit outside the lock; only the state swap is atomic.
+        pca = PCA(n_components=self.dim, random_state=self.seed)
+        pca.fit(raw_embeddings)
+        explained = float(np.sum(pca.explained_variance_ratio_))
+        with self._lock:
+            self._pca = pca
+            self.is_fitted = True
         audit_print(
             "encoder.classical.fit.completed",
             output_dim=self.dim,
@@ -52,11 +57,13 @@ class ClassicalPipelineEncoder:
 
     def transform(self, raw_embedding: np.ndarray) -> list[float]:
         """Apply PCA transform to a single raw embedding. Requires fit()."""
-        if not self.is_fitted or self._pca is None:
+        with self._lock:
+            pca, is_fitted = self._pca, self.is_fitted
+        if not is_fitted or pca is None:
             raise ValidationError(
                 "[PIPELINE classical] Encoder not fitted. Index a dataset first."
             )
-        reduced = self._pca.transform(raw_embedding.reshape(1, -1))[0]
+        reduced = pca.transform(raw_embedding.reshape(1, -1))[0]
         return l2_normalize(reduced.tolist())
 
     def encode(self, text: str) -> list[float]:
@@ -98,8 +105,9 @@ class ClassicalPipelineEncoder:
         if not os.path.exists(path):
             return False
         state = joblib.load(path)
-        self._pca = state["pca"]
-        self.is_fitted = True
+        with self._lock:
+            self._pca = state["pca"]
+            self.is_fitted = True
         audit_print("encoder.classical.load_state", path=path)
         return True
 

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, select
+from collections import defaultdict
+
+from sqlalchemy import and_, delete, func as sa_func, select, text as sa_text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from audit import audit_print, preview_results, preview_text, preview_vector
@@ -168,36 +171,43 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
         self.session = session
 
     def upsert_documents(self, documents: list[Document]) -> int:
+        if not documents:
+            return 0
         audit_print("repository.documents.upsert.start", batch_size=len(documents))
-        count = 0
-        for item in documents:
-            audit_print(
-                "repository.documents.upsert.item",
-                dataset_id=item.dataset,
-                doc_id=item.doc_id,
-                title=preview_text(item.title, limit=80),
-                text=preview_text(item.text),
-                embedding=preview_vector(item.embedding_vector),
-                quantum=preview_vector(item.quantum_vector),
-                statistical=preview_vector(item.statistical_vector),
-            )
-            row = self.session.scalar(select(DocumentModel).where(DocumentModel.dataset == item.dataset, DocumentModel.doc_id == item.doc_id))
-            if row is None:
-                row = DocumentModel(dataset=item.dataset, doc_id=item.doc_id, title=item.title, text=item.text)
-                self.session.add(row)
-            row.title = item.title
-            row.text = item.text
-            row.metadata_json = item.metadata
-            row.embedding_vector = item.embedding_vector
-            row.quantum_vector = item.quantum_vector
-            row.statistical_vector = item.statistical_vector
-            count += 1
+        values = [
+            {
+                "dataset": doc.dataset,
+                "doc_id": doc.doc_id,
+                "title": doc.title,
+                "text": doc.text,
+                "metadata": doc.metadata,
+                "embedding_vector": doc.embedding_vector,
+                "quantum_vector": doc.quantum_vector,
+                "statistical_vector": doc.statistical_vector,
+            }
+            for doc in documents
+        ]
+        stmt = pg_insert(DocumentModel).values(values)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_documents_dataset_doc_id",
+            set_={
+                "title": stmt.excluded.title,
+                "text": stmt.excluded.text,
+                "metadata": stmt.excluded.metadata,
+                "embedding_vector": stmt.excluded.embedding_vector,
+                "quantum_vector": stmt.excluded.quantum_vector,
+                "statistical_vector": stmt.excluded.statistical_vector,
+            },
+        )
+        self.session.execute(stmt)
         self.session.commit()
-        audit_print("repository.documents.upsert.completed", batch_size=len(documents), persisted=count)
-        return count
+        audit_print("repository.documents.upsert.completed", batch_size=len(documents), persisted=len(documents))
+        return len(documents)
 
     def count_by_dataset(self, dataset: str) -> int:
-        return len(self.list_document_ids(dataset))
+        return self.session.scalar(
+            select(sa_func.count()).select_from(DocumentModel).where(DocumentModel.dataset == dataset)
+        ) or 0
 
     def list_document_ids(self, dataset: str) -> list[str]:
         return list(self.session.scalars(select(DocumentModel.doc_id).where(DocumentModel.dataset == dataset)))
@@ -223,16 +233,28 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
             top_k=top_k,
             query_vector=preview_vector(query_vector),
         )
-        stmt = (
-            select(DocumentModel, (1 - column.cosine_distance(query_vector)).label("score"))
+        # Subquery computes cosine_distance once; outer query derives score from the cached value.
+        inner = (
+            select(
+                DocumentModel.doc_id,
+                DocumentModel.text,
+                DocumentModel.metadata_json,
+                column.cosine_distance(query_vector).label("dist"),
+            )
             .where(DocumentModel.dataset == dataset)
             .where(column.is_not(None))
-            .order_by(column.cosine_distance(query_vector))
+            .order_by(sa_text("dist"))
             .limit(top_k)
+        ).subquery("ranked")
+        stmt = select(
+            inner.c.doc_id,
+            inner.c.text,
+            inner.c.metadata_json,
+            (1 - inner.c.dist).label("score"),
         )
         rows = self.session.execute(stmt).all()
         results = [
-            SearchResult(doc_id=row.DocumentModel.doc_id, text=row.DocumentModel.text, score=float(row.score), metadata=row.DocumentModel.metadata_json or {})
+            SearchResult(doc_id=row.doc_id, text=row.text, score=float(row.score), metadata=row.metadata_json or {})
             for row in rows
         ]
         audit_print(
@@ -287,15 +309,12 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
                 QrelModel.query_id == query_id,
             )
         )
-        for doc_id, relevance in qrels.items():
-            self.session.add(
-                QrelModel(
-                    dataset=dataset,
-                    split=split,
-                    query_id=query_id,
-                    doc_id=doc_id,
-                    relevance=int(relevance),
-                )
+        if qrels:
+            self.session.execute(
+                pg_insert(QrelModel).values([
+                    {"dataset": dataset, "split": split, "query_id": query_id, "doc_id": doc_id, "relevance": int(rel)}
+                    for doc_id, rel in qrels.items()
+                ])
             )
         self.session.commit()
 
@@ -317,6 +336,29 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
         relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
         return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer)
 
+    def get_by_query_text(self, dataset: str, query_text: str) -> GroundTruth | None:
+        normalized = query_text.strip().lower()
+        # Prefer entries that have an ideal_answer set (nulls last)
+        row = self.session.scalar(
+            select(QueryModel)
+            .where(
+                QueryModel.dataset == dataset,
+                QueryModel.split == "test",
+                sa_func.lower(sa_func.trim(QueryModel.query_text)) == normalized,
+            )
+            .order_by(QueryModel.ideal_answer.desc().nullslast())
+            .limit(1)
+        )
+        if not row:
+            return None
+        qrels = self.session.scalars(
+            select(QrelModel)
+            .where(QrelModel.dataset == dataset, QrelModel.split == "test", QrelModel.query_id == row.query_id)
+            .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
+        ).all()
+        relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
+        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer)
+
     def list_by_dataset(self, dataset: str) -> list[GroundTruth]:
         from domain.excluded_queries import EXCLUDED_QUERY_TEXTS, is_excluded_query
 
@@ -330,16 +372,36 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
             .order_by(QueryModel.id.asc())
         ).all()
         rows = [r for r in rows if not is_excluded_query(r.query_text)]
-        items: list[GroundTruth] = []
-        for row in rows:
-            qrels = self.session.scalars(
-                select(QrelModel)
-                .where(QrelModel.dataset == dataset, QrelModel.split == "test", QrelModel.query_id == row.query_id)
-                .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
-            ).all()
-            relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
-            items.append(GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer))
-        return items
+        if not rows:
+            return []
+
+        # Load all qrels in a single query (eliminates N+1)
+        query_ids = [r.query_id for r in rows]
+        all_qrels = self.session.scalars(
+            select(QrelModel)
+            .where(
+                QrelModel.dataset == dataset,
+                QrelModel.split == "test",
+                QrelModel.query_id.in_(query_ids),
+            )
+            .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
+        ).all()
+        qrels_by_qid: dict[str, list] = defaultdict(list)
+        for q in all_qrels:
+            qrels_by_qid[q.query_id].append(q)
+
+        return [
+            GroundTruth(
+                row.query_id,
+                row.query_text,
+                [q.doc_id for q in qrels_by_qid.get(row.query_id, []) if int(q.relevance) > 0],
+                row.dataset,
+                row.user_id,
+                row.created_at,
+                row.ideal_answer,
+            )
+            for row in rows
+        ]
 
     def delete(self, dataset: str, query_id: str) -> bool:
         row = self.session.scalar(

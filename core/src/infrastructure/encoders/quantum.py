@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import numpy as np
@@ -54,6 +55,7 @@ class QuantumPipelineEncoder:
         self._angle_min: np.ndarray | None = None
         self._angle_max: np.ndarray | None = None
         self.is_fitted: bool = False
+        self._lock = threading.RLock()
 
         # Fixed random weights for StronglyEntanglingLayers — seeded for reproducibility.
         rng = np.random.default_rng(seed)
@@ -104,9 +106,9 @@ class QuantumPipelineEncoder:
         )
 
         # Step 1: PCA_base 384 → dim=64
-        self._pca_base = PCA(n_components=self.dim, random_state=self.seed)
-        base_vectors = self._pca_base.fit_transform(raw_embeddings)  # [N, dim]
-        base_explained = float(np.sum(self._pca_base.explained_variance_ratio_))
+        pca_base = PCA(n_components=self.dim, random_state=self.seed)
+        base_vectors = pca_base.fit_transform(raw_embeddings)  # [N, dim]
+        base_explained = float(np.sum(pca_base.explained_variance_ratio_))
         audit_print(
             "encoder.quantum.fit.pca_base_completed",
             output_dim=self.dim,
@@ -114,12 +116,12 @@ class QuantumPipelineEncoder:
         )
 
         # Step 2: PCA_angles dim=64 → n_qubits=6 (for angle embedding)
-        self._pca_angles = PCA(n_components=self.n_qubits, random_state=self.seed)
-        angle_vectors = self._pca_angles.fit_transform(base_vectors)  # [N, n_qubits]
-        angles_explained = float(np.sum(self._pca_angles.explained_variance_ratio_))
+        pca_angles = PCA(n_components=self.n_qubits, random_state=self.seed)
+        angle_vectors = pca_angles.fit_transform(base_vectors)  # [N, n_qubits]
+        angles_explained = float(np.sum(pca_angles.explained_variance_ratio_))
         # Per-component min/max for normalization → [0, π]
-        self._angle_min = angle_vectors.min(axis=0)
-        self._angle_max = angle_vectors.max(axis=0)
+        angle_min = angle_vectors.min(axis=0)
+        angle_max = angle_vectors.max(axis=0)
         audit_print(
             "encoder.quantum.fit.pca_angles_completed",
             output_dim=self.n_qubits,
@@ -131,9 +133,10 @@ class QuantumPipelineEncoder:
             "encoder.quantum.fit.circuit_pass.start",
             n_samples=raw_embeddings.shape[0],
         )
+        span = np.where(angle_max - angle_min == 0, 1.0, angle_max - angle_min)
         quantum_vectors = []
         for angles in angle_vectors:
-            angles_norm = self._normalize_angles(angles)
+            angles_norm = np.pi * (angles - angle_min) / span
             quantum_vectors.append(self._run_circuit(angles_norm))
         quantum_arr = np.array(quantum_vectors, dtype=np.float64)  # [N, circuit_output_dim]
         audit_print(
@@ -144,10 +147,17 @@ class QuantumPipelineEncoder:
 
         # Step 4: Concat [base_64, quantum_64] → 128, fit PCA_final → 64
         concat_vectors = np.concatenate([base_vectors, quantum_arr], axis=1)  # [N, 128]
-        self._pca_final = PCA(n_components=self.dim, random_state=self.seed)
-        self._pca_final.fit(concat_vectors)
-        final_explained = float(np.sum(self._pca_final.explained_variance_ratio_))
-        self.is_fitted = True
+        pca_final = PCA(n_components=self.dim, random_state=self.seed)
+        pca_final.fit(concat_vectors)
+        final_explained = float(np.sum(pca_final.explained_variance_ratio_))
+        # Atomic state swap: all components are ready, swap together
+        with self._lock:
+            self._pca_base = pca_base
+            self._pca_angles = pca_angles
+            self._angle_min = angle_min
+            self._angle_max = angle_max
+            self._pca_final = pca_final
+            self.is_fitted = True
         audit_print(
             "encoder.quantum.fit.pca_final_completed",
             input_dim=self.dim + self.circuit_output_dim,
@@ -169,50 +179,35 @@ class QuantumPipelineEncoder:
         hellinger = np.sqrt(np.abs(np.array(probs, dtype=np.float64)))
         return hellinger.tolist()
 
-    def _normalize_angles(self, angles: np.ndarray) -> np.ndarray:
-        """Map PCA_angles components to [0, π] using per-component min/max from fit()."""
-        span = self._angle_max - self._angle_min
-        span = np.where(span == 0, 1.0, span)  # avoid division by zero
-        return np.pi * (angles - self._angle_min) / span
-
     def transform(self, raw_embedding: np.ndarray) -> list[float]:
         """Apply Residual Quantum Feature Map to a single raw embedding.
 
         text → PCA_base(64) → PCA_angles(6) → circuit → Hellinger(64)
              → concat(base_64, quantum_64=128) → PCA_final(64) → L2 normalize
         """
-        if not self.is_fitted or self._pca_base is None or self._pca_angles is None or self._pca_final is None:
+        with self._lock:
+            pca_base = self._pca_base
+            pca_angles = self._pca_angles
+            pca_final = self._pca_final
+            angle_min = self._angle_min
+            angle_max = self._angle_max
+            is_fitted = self.is_fitted
+        if not is_fitted or pca_base is None or pca_angles is None or pca_final is None:
             raise ValidationError(
                 "[PIPELINE quantum] Encoder not fitted. Index a dataset first."
             )
         # PCA_base: 384 → 64
-        base_vec = self._pca_base.transform(raw_embedding.reshape(1, -1))[0]
-        audit_print(
-            "encoder.quantum.transform",
-            pipeline="quantum",
-            base_vector_dim=len(base_vec),
-        )
+        base_vec = pca_base.transform(raw_embedding.reshape(1, -1))[0]
         # PCA_angles: 64 → 6 → normalize [0, π]
-        angles = self._pca_angles.transform(base_vec.reshape(1, -1))[0]
-        angles_norm = self._normalize_angles(angles)
+        angles = pca_angles.transform(base_vec.reshape(1, -1))[0]
+        span = np.where(angle_max - angle_min == 0, 1.0, angle_max - angle_min)
+        angles_norm = np.pi * (angles - angle_min) / span
         # Circuit → Hellinger → quantum_64
         quantum_vec = self._run_circuit(angles_norm)
-        audit_print(
-            "encoder.quantum.transform",
-            pipeline="quantum",
-            quantum_vector_dim=len(quantum_vec),
-            concat_dim=len(base_vec) + len(quantum_vec),
-        )
         # Concat [base_64, quantum_64] → 128 → PCA_final → 64 → L2
         concat = np.concatenate([base_vec, np.array(quantum_vec, dtype=np.float64)])
-        final = self._pca_final.transform(concat.reshape(1, -1))[0]
-        result = l2_normalize(final.tolist())
-        audit_print(
-            "encoder.quantum.transform",
-            pipeline="quantum",
-            final_vector_dim=len(result),
-        )
-        return result
+        final = pca_final.transform(concat.reshape(1, -1))[0]
+        return l2_normalize(final.tolist())
 
     def encode(self, text: str) -> list[float]:
         """Full pipeline: text → SBERT → Residual Quantum Feature Map → L2 normalize."""
@@ -262,28 +257,37 @@ class QuantumPipelineEncoder:
         if not os.path.exists(path):
             return False
         state = joblib.load(path)
-        self._pca_base = state["pca_base"]
-        self._pca_angles = state["pca_angles"]
-        self._pca_final = state["pca_final"]
-        self._angle_min = state["angle_min"]
-        self._angle_max = state["angle_max"]
-        self.is_fitted = True
+        with self._lock:
+            self._pca_base = state["pca_base"]
+            self._pca_angles = state["pca_angles"]
+            self._pca_final = state["pca_final"]
+            self._angle_min = state["angle_min"]
+            self._angle_max = state["angle_max"]
+            self.is_fitted = True
         audit_print("encoder.quantum.load_state", path=path)
         return True
 
     def encode_batch_transform(self, raw_embeddings: np.ndarray) -> list[list[float]]:
         """Batch transform pre-computed raw embeddings (used during indexing)."""
-        if not self.is_fitted or self._pca_base is None or self._pca_angles is None or self._pca_final is None:
+        with self._lock:
+            pca_base = self._pca_base
+            pca_angles = self._pca_angles
+            pca_final = self._pca_final
+            angle_min = self._angle_min
+            angle_max = self._angle_max
+            is_fitted = self.is_fitted
+        if not is_fitted or pca_base is None or pca_angles is None or pca_final is None:
             raise ValidationError(
                 "[PIPELINE quantum] Encoder not fitted. Call fit() first."
             )
-        base_vecs = self._pca_base.transform(raw_embeddings)        # [N, dim]
-        angle_vecs = self._pca_angles.transform(base_vecs)          # [N, n_qubits]
+        base_vecs = pca_base.transform(raw_embeddings)        # [N, dim]
+        angle_vecs = pca_angles.transform(base_vecs)          # [N, n_qubits]
+        span = np.where(angle_max - angle_min == 0, 1.0, angle_max - angle_min)
         quantum_vecs = []
         for angles in angle_vecs:
-            angles_norm = self._normalize_angles(angles)
+            angles_norm = np.pi * (angles - angle_min) / span
             quantum_vecs.append(self._run_circuit(angles_norm))
         quantum_arr = np.array(quantum_vecs, dtype=np.float64)       # [N, circuit_output_dim]
         concat = np.concatenate([base_vecs, quantum_arr], axis=1)    # [N, dim+circuit_output_dim]
-        finals = self._pca_final.transform(concat)                   # [N, dim]
+        finals = pca_final.transform(concat)                         # [N, dim]
         return [l2_normalize(row.tolist()) for row in finals]

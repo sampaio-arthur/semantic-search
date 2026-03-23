@@ -84,18 +84,10 @@ def _find_ground_truth(services: Services, dataset_id: str, query_id: str | None
         item = services.ground_truths.get(dataset_id, query_id)
         if item:
             return item
-    normalized = (query_text or "").strip().lower()
+    normalized = (query_text or "").strip()
     if not normalized:
         return None
-    matches = [
-        item for item in services.ground_truths.list_by_dataset(dataset_id)
-        if (item.query_text or "").strip().lower() == normalized
-    ]
-    if not matches:
-        return None
-    # Prefer the entry that has an ideal_answer set, so Answer Similarity can be computed.
-    with_answer = [m for m in matches if m.ideal_answer]
-    return with_answer[0] if with_answer else matches[0]
+    return services.ground_truths.get_by_query_text(dataset_id, normalized)
 
 
 def _enrich_metrics(existing: dict | None, evaluated, k: int) -> dict:

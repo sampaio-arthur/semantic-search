@@ -71,10 +71,8 @@ export interface SearchResult {
 }
 
 export interface SearchMetrics {
-  accuracy_at_k?: number | null;
   precision_at_k?: number | null;
   recall_at_k?: number | null;
-  f1_at_k?: number | null;
   mrr?: number | null;
   ndcg_at_k?: number | null;
   spearman?: number | null;
