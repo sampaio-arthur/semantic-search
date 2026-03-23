@@ -611,7 +611,6 @@ def upsert_benchmark_label(payload: BenchmarkLabelInput, user_id: int = Depends(
         query_text=payload.query_text,
         relevant_doc_ids=relevant,
         user_id=user_id,
-        ideal_answer=payload.ideal_answer or None,
     )
     return {
         "benchmark_id": item.query_id,

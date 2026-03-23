@@ -54,7 +54,6 @@ export interface DatasetDetail {
 export interface BenchmarkLabelInput {
   dataset_id: string;
   query_text: string;
-  ideal_answer: string;
 }
 
 export interface BenchmarkLabel {

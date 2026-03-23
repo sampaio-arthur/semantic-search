@@ -15,13 +15,7 @@ export default function Benchmarks() {
   const [isBusy, setIsBusy] = useState(false);
 
   const [queryText, setQueryText] = useState('');
-  const [idealAnswer, setIdealAnswer] = useState('');
   const [message, setMessage] = useState('');
-
-  // inline editing state: query_id -> draft text
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState('');
-  const [savingId, setSavingId] = useState<string | null>(null);
 
   // search/filter for the queries list
   const [queryFilter, setQueryFilter] = useState('');
@@ -54,8 +48,8 @@ export default function Benchmarks() {
   };
 
   const handleSave = async () => {
-    if (!queryText.trim() || !idealAnswer.trim()) {
-      setMessage('Preencha pergunta e resposta ideal.');
+    if (!queryText.trim()) {
+      setMessage('Preencha a pergunta.');
       return;
     }
 
@@ -64,11 +58,9 @@ export default function Benchmarks() {
       await api.upsertBenchmarkLabel({
         dataset_id: activeDatasetId,
         query_text: queryText.trim(),
-        ideal_answer: idealAnswer.trim(),
       });
       await loadAll(activeDatasetId);
       setQueryText('');
-      setIdealAnswer('');
       setMessage('Gabarito salvo com sucesso.');
     } catch (error) {
       console.error(error);
@@ -92,36 +84,6 @@ export default function Benchmarks() {
     }
   };
 
-  const startEditing = (q: EvaluationQuery) => {
-    setEditingId(q.query_id);
-    setEditDraft(q.ideal_answer ?? '');
-  };
-
-  const cancelEditing = () => {
-    setEditingId(null);
-    setEditDraft('');
-  };
-
-  const saveIdealAnswer = async (q: EvaluationQuery) => {
-    if (!editDraft.trim()) return;
-    setSavingId(q.query_id);
-    try {
-      await api.upsertBenchmarkLabel({
-        dataset_id: activeDatasetId,
-        query_text: q.query,
-        ideal_answer: editDraft.trim(),
-      });
-      setEditingId(null);
-      setEditDraft('');
-      await loadAll(activeDatasetId);
-    } catch (error) {
-      console.error(error);
-      setMessage(error instanceof Error ? error.message : 'Erro ao salvar resposta ideal');
-    } finally {
-      setSavingId(null);
-    }
-  };
-
   const filteredQueries = queries.filter((q) =>
     queryFilter === '' || q.query.toLowerCase().includes(queryFilter.toLowerCase())
   );
@@ -139,7 +101,7 @@ export default function Benchmarks() {
           <div>
             <h1 className='text-2xl font-semibold'>Gabaritos de Acuracia</h1>
             <p className='text-sm text-muted-foreground'>
-              Cadastre pergunta e resposta ideal. O sistema infere docs relevantes para medir ranking e precisao classico vs quantico.
+              Cadastre pergunta para inferir docs relevantes. As respostas ideais sao fixadas pelo sistema.
             </p>
           </div>
           <Button variant='outline' onClick={() => navigate('/chat')}>Voltar ao Chat</Button>
@@ -162,16 +124,6 @@ export default function Benchmarks() {
             />
           </div>
 
-          <div className='space-y-2'>
-            <label className='text-sm font-medium'>Resposta ideal (gabarito)</label>
-            <textarea
-              className='w-full bg-background border border-border rounded-md px-3 py-2 text-sm min-h-32'
-              placeholder='Descreva a resposta esperada para comparar a qualidade da resposta gerada.'
-              value={idealAnswer}
-              onChange={(e) => setIdealAnswer(e.target.value)}
-            />
-          </div>
-
           <div className='flex items-center gap-2'>
             <Button onClick={handleSave} disabled={isBusy}>Salvar gabarito</Button>
             <Button variant='outline' onClick={() => loadAll(activeDatasetId)} disabled={isBusy}>Atualizar lista</Button>
@@ -180,7 +132,7 @@ export default function Benchmarks() {
           {message && <p className='text-sm text-muted-foreground'>{message}</p>}
         </div>
 
-        {/* Queries existentes do dataset para atribuir ideal_answer */}
+        {/* Queries existentes do dataset (read-only ideal_answer) */}
         <div className='rounded-xl border border-border p-4 space-y-3'>
           <div className='flex items-center justify-between gap-2'>
             <div>
@@ -215,47 +167,12 @@ export default function Benchmarks() {
                       <p className='text-xs text-muted-foreground font-mono'>{q.query_id}</p>
                       <p className='text-sm mt-0.5'>{q.query}</p>
                     </div>
-                    {editingId !== q.query_id && (
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={() => startEditing(q)}
-                        disabled={isBusy}
-                        className='shrink-0'
-                      >
-                        {q.ideal_answer ? 'Editar' : 'Atribuir gabarito'}
-                      </Button>
-                    )}
                   </div>
 
-                  {q.ideal_answer && editingId !== q.query_id && (
+                  {q.ideal_answer && (
                     <div className='pl-0 space-y-0.5'>
                       <p className='text-xs font-medium text-green-400'>Resposta ideal</p>
                       <p className='text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3'>{q.ideal_answer}</p>
-                    </div>
-                  )}
-
-                  {editingId === q.query_id && (
-                    <div className='space-y-2'>
-                      <textarea
-                        autoFocus
-                        className='w-full bg-background border border-border rounded-md px-3 py-2 text-sm min-h-24'
-                        placeholder='Descreva a resposta esperada...'
-                        value={editDraft}
-                        onChange={(e) => setEditDraft(e.target.value)}
-                      />
-                      <div className='flex gap-2'>
-                        <Button
-                          size='sm'
-                          onClick={() => saveIdealAnswer(q)}
-                          disabled={savingId === q.query_id || !editDraft.trim()}
-                        >
-                          {savingId === q.query_id ? 'Salvando...' : 'Salvar'}
-                        </Button>
-                        <Button size='sm' variant='outline' onClick={cancelEditing} disabled={savingId === q.query_id}>
-                          Cancelar
-                        </Button>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -277,8 +194,12 @@ export default function Benchmarks() {
                     <div className='space-y-1'>
                       <p className='text-sm font-semibold'>Pergunta</p>
                       <p className='text-sm text-muted-foreground'>{item.query_text}</p>
-                      <p className='text-sm font-semibold pt-2'>Resposta ideal</p>
-                      <p className='text-sm text-muted-foreground whitespace-pre-wrap'>{item.ideal_answer}</p>
+                      {item.ideal_answer && (
+                        <>
+                          <p className='text-sm font-semibold pt-2'>Resposta ideal</p>
+                          <p className='text-sm text-muted-foreground whitespace-pre-wrap'>{item.ideal_answer}</p>
+                        </>
+                      )}
                       <p className='text-xs text-muted-foreground pt-1'>Docs relevantes inferidos: {item.relevant_doc_ids.length}</p>
                     </div>
                     <Button variant='destructive' size='sm' onClick={() => handleDelete(item)} disabled={isBusy}>Excluir</Button>

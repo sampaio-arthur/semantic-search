@@ -9,6 +9,7 @@ import numpy as np
 from audit import audit_print, category_log, preview_results, preview_text, preview_vector
 from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
 from domain.excluded_queries import is_excluded_query
+from domain.ideal_answers import IDEAL_ANSWERS
 from domain.exceptions import NotFoundError, ValidationError
 from domain.ports import (
     DatasetProviderPort,
@@ -257,6 +258,17 @@ class IndexDatasetUseCase:
                     query_text=str(q["query_text"]),
                     qrels=qrels,
                 )
+                ideal = IDEAL_ANSWERS.get(str(q["query_id"]))
+                if ideal:
+                    self.ground_truths.upsert(
+                        GroundTruth(
+                            query_id=str(q["query_id"]),
+                            query_text=str(q["query_text"]),
+                            relevant_doc_ids=relevant_doc_ids,
+                            dataset=dataset_id,
+                            ideal_answer=ideal,
+                        )
+                    )
         if excluded_count > 0:
             category_log("INDEX", excluded_queries=excluded_count, remaining_queries=len(query_snapshot))
 
