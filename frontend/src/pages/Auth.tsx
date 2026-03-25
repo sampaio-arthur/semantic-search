@@ -178,9 +178,9 @@ export default function Auth() {
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
                     <Eye className="h-4 w-4" />
+                  ) : (
+                    <EyeOff className="h-4 w-4" />
                   )}
                 </Button>
               </div>

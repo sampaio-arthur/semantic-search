@@ -1,8 +1,8 @@
-﻿import { useRef, useEffect } from 'react';
-import { User, Bot } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+﻿import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Message } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { Bot, User } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 interface MessageListProps {
   messages: Message[];
@@ -50,7 +50,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium mb-1">
-                  {message.role === 'user' ? 'Você' : 'Quantum Search'}
+                  {message.role === 'user' ? 'Você' : 'Semantic Search'}
                 </p>
                 <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">
                   {message.content}
@@ -69,7 +69,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <p className="text-sm font-medium mb-2">Quantum Search</p>
+                <p className="text-sm font-medium mb-2">Semantic Search</p>
                 <div className="typing-indicator">
                   <span />
                   <span />

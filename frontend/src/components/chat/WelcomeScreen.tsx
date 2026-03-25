@@ -1,4 +1,4 @@
-import { FlaskConical, ArrowRight } from 'lucide-react';
+import { ArrowRight, FlaskConical } from 'lucide-react';
 
 interface WelcomeScreenProps {
   onQueryClick?: (query: string) => void;
@@ -54,7 +54,7 @@ export function WelcomeScreen({ onQueryClick }: WelcomeScreenProps) {
             ))}
           </div>
           <p className="text-xs text-muted-foreground mt-3 border-t border-border pt-3">
-            Todos produzem vetores de 64 dimensões normalizados por L2. A única variável experimental é a transformação aplicada — todas as demais variáveis são controladas (modelo base, métrica de similaridade, métricas de avaliação, dataset).
+            Todos produzem vetores de 64 dimensões normalizados por L2. A única variável experimental é a transformação vetorial, todas as demais variáveis são controladas (modelo base, métrica de similaridade, métricas de avaliação, dataset).
           </p>
         </div>
 

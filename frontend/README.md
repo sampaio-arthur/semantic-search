@@ -1,4 +1,4 @@
-# Quantum Search Frontend
+# Semantic Search Frontend
 
 Interface web do projeto de busca semantica comparativa.
 
