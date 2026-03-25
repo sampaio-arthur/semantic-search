@@ -1,4 +1,4 @@
-# Documentacao Tecnica - Quantum Search (estado atual do codigo)
+# Documentacao Tecnica - Semantic Search (estado atual do codigo)
 
 ## Objetivo
 
@@ -77,21 +77,25 @@ Modos suportados:
 - `compare`
 
 **Pipeline classico**:
+
 1. Encode da query com `ClassicalPipelineEncoder`
 2. Busca em `documents.embedding_vector`
 3. Score por similaridade cosseno, ordenacao descrescente
 
 **Pipeline quantico-inspirado**:
+
 1. Encode da query com `QuantumPipelineEncoder`
 2. Busca em `documents.quantum_vector`
 3. Score por similaridade cosseno, ordenacao descrescente
 
 **Pipeline estatistico**:
+
 1. Encode da query com `StatisticalPipelineEncoder`
 2. Busca em `documents.statistical_vector`
 3. Score por similaridade cosseno, ordenacao descrescente
 
 **Medicao de tempo (identica para os tres pipelines)**:
+
 - `encode_time_ms` — tempo de geracao do vetor da query (`time.perf_counter()`)
 - `search_time_ms` — tempo da busca no pgvector
 - `total_time_ms` — soma de encode + search
@@ -213,6 +217,7 @@ O metodo e identico para todos os pipelines.
 ```
 
 Tambem emitido via `audit_print()`:
+
 ```
 {"event": "answer_similarity.compute.completed", "similarity": 0.7341}
 ```

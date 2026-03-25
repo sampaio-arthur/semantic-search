@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { ChatInput } from '@/components/chat/ChatInput';
+import { ChatSidebar } from '@/components/chat/ChatSidebar';
+import { ComparisonPanel } from '@/components/chat/ComparisonPanel';
+import { MessageList } from '@/components/chat/MessageList';
+import { PipelinePanel } from '@/components/chat/PipelinePanel';
+import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ChatSidebar } from '@/components/chat/ChatSidebar';
-import { ChatInput } from '@/components/chat/ChatInput';
-import { MessageList } from '@/components/chat/MessageList';
-import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
-import { ComparisonPanel } from '@/components/chat/ComparisonPanel';
-import { PipelinePanel } from '@/components/chat/PipelinePanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Conversation, DatasetIndexStatus, Message, SearchResponse } from '@/lib/api';
+import { Menu } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const DEFAULT_DATASET_ID = 'beir/trec-covid';
 
@@ -192,7 +192,7 @@ export default function Chat() {
               <Menu className="h-5 w-5" />
             </Button>
           )}
-          <h1 className="text-lg font-medium">Quantum Search</h1>
+          <h1 className="text-lg font-medium">Semantic Search</h1>
           <span className="ml-auto text-xs text-muted-foreground">Top 25</span>
         </header>
 
