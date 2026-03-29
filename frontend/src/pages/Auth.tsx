@@ -4,8 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Sparkles, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
 
 type AuthMode = 'login' | 'register' | 'forgot' | 'reset';
 
@@ -106,9 +105,11 @@ export default function Auth() {
       <div className="auth-card fade-in">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gradient-to-br from-success/20 to-success/5">
-            <Sparkles className="h-7 w-7 text-success" />
-          </div>
+          <img
+            src="/quantum-dot.png"
+            alt="Quantum Dot"
+            className="h-14 w-14 rounded-xl object-contain"
+          />
         </div>
 
         {/* Header */}
