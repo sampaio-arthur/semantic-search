@@ -30,15 +30,19 @@ const PIPELINE_COLORS: Record<string, string> = {
   statistical: '#10B981',
 };
 
-const METRIC_OPTIONS = [
-  { key: 'ndcg_at_k', label: 'nDCG@25' },
-  { key: 'recall_at_k', label: 'Recall@25' },
-  { key: 'mrr', label: 'MRR@25' },
-  { key: 'precision_at_k', label: 'Precision@25' },
-  { key: 'answer_similarity', label: 'Answer Similarity' },
-] as const;
+const ALLOWED_TOP_K = [10, 25, 50, 100] as const;
 
-type MetricKey = (typeof METRIC_OPTIONS)[number]['key'];
+function metricOptions(k: number) {
+  return [
+    { key: 'ndcg_at_k' as const, label: `nDCG@${k}` },
+    { key: 'recall_at_k' as const, label: `Recall@${k}` },
+    { key: 'mrr' as const, label: `MRR@${k}` },
+    { key: 'precision_at_k' as const, label: `Precision@${k}` },
+    { key: 'answer_similarity' as const, label: 'Answer Similarity' },
+  ];
+}
+
+type MetricKey = 'ndcg_at_k' | 'recall_at_k' | 'mrr' | 'precision_at_k' | 'answer_similarity';
 
 function formatTimestamp(ts: number): string {
   return new Date(ts).toLocaleString('pt-BR');
@@ -54,6 +58,7 @@ export default function BatchEvaluation() {
   const [result, setResult] = useState<BatchEvaluationResult | null>(null);
   const [error, setError] = useState('');
   const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [evalK, setEvalK] = useState<number>(25);
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('ndcg_at_k');
   const [sortField, setSortField] = useState<string>('query_text');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -110,12 +115,12 @@ export default function BatchEvaluation() {
     setStatus('running');
     setProgress({ current_query: 0, total_queries: 0, current_pipeline: '', completed_pipelines: [] });
     try {
-      await api.startBatchEvaluation(DEFAULT_DATASET_ID);
+      await api.startBatchEvaluation(DEFAULT_DATASET_ID, evalK);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao iniciar');
       setStatus('failed');
     }
-  }, []);
+  }, [evalK]);
 
   const handleRerun = useCallback(() => {
     localStorage.removeItem(CACHE_KEY);
@@ -134,13 +139,15 @@ export default function BatchEvaluation() {
 
   const pipelines = result?.pipelines || [];
   const queryCount = pipelines[0]?.query_count || 0;
+  const effectiveK = result?.k ?? evalK;
+  const METRIC_OPTIONS = metricOptions(effectiveK);
 
   // Chart data for aggregated metrics
   const metricsChartData = [
-    { metric: 'nDCG@25', ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_ndcg_at_k])) },
-    { metric: 'Recall@25', ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_recall_at_k])) },
-    { metric: 'MRR@25', ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_mrr])) },
-    { metric: 'P@25', ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_precision_at_k])) },
+    { metric: `nDCG@${effectiveK}`, ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_ndcg_at_k])) },
+    { metric: `Recall@${effectiveK}`, ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_recall_at_k])) },
+    { metric: `MRR@${effectiveK}`, ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_mrr])) },
+    { metric: `P@${effectiveK}`, ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_precision_at_k])) },
     { metric: 'Ans. Sim.', ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_answer_similarity ?? 0])) },
   ];
 
@@ -153,10 +160,10 @@ export default function BatchEvaluation() {
 
   // Table rows for means
   const metricsRows = [
-    { label: 'nDCG@25', key: 'mean_ndcg_at_k' as const },
-    { label: 'Recall@25', key: 'mean_recall_at_k' as const },
-    { label: 'MRR@25', key: 'mean_mrr' as const },
-    { label: 'Precision@25', key: 'mean_precision_at_k' as const },
+    { label: `nDCG@${effectiveK}`, key: 'mean_ndcg_at_k' as const },
+    { label: `Recall@${effectiveK}`, key: 'mean_recall_at_k' as const },
+    { label: `MRR@${effectiveK}`, key: 'mean_mrr' as const },
+    { label: `Precision@${effectiveK}`, key: 'mean_precision_at_k' as const },
     { label: 'Answer Similarity', key: 'mean_answer_similarity' as const },
   ];
 
@@ -234,13 +241,26 @@ export default function BatchEvaluation() {
         </Button>
         <h1 className="text-lg font-medium">Avaliação Batch Comparativa</h1>
         <span className="text-xs text-muted-foreground ml-auto">
-          Dataset: {DEFAULT_DATASET_ID} | Queries: {queryCount || '—'} | Top-25
+          Dataset: {DEFAULT_DATASET_ID} | Queries: {queryCount || '—'} | Top-{effectiveK}
         </span>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-6">
         {/* Action buttons */}
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">k:</label>
+            <select
+              value={evalK}
+              onChange={e => setEvalK(Number(e.target.value))}
+              className="text-xs bg-background border border-border rounded px-2 py-1"
+              disabled={status === 'running'}
+            >
+              {ALLOWED_TOP_K.map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
           {status === 'idle' && !result && (
             <Button onClick={handleStart}>Executar Avaliação</Button>
           )}
@@ -282,6 +302,69 @@ export default function BatchEvaluation() {
         {/* Results */}
         {result && pipelines.length > 0 && (
           <>
+            {/* CSV Export */}
+            {status === 'completed' && (
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => {
+                  const fmt = (v: number | null | undefined): string =>
+                    v !== null && v !== undefined ? v.toFixed(4) : '';
+                  const esc = (s: string): string => `"${s.replace(/"/g, '""')}"`;
+                  const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '');
+                  const lines: string[] = [];
+
+                  lines.push('pipeline,k,query_count,error_count,mean_ndcg_at_k,mean_recall_at_k,mean_mrr_at_k,mean_precision_at_k,mean_answer_similarity,mean_encode_time_ms,mean_search_time_ms,mean_total_time_ms');
+                  for (const p of pipelines) {
+                    lines.push([
+                      p.pipeline,
+                      String(effectiveK),
+                      String(p.query_count),
+                      String((p as Record<string, unknown>).error_count ?? 0),
+                      fmt(p.mean_ndcg_at_k),
+                      fmt(p.mean_recall_at_k),
+                      fmt(p.mean_mrr),
+                      fmt(p.mean_precision_at_k),
+                      fmt(p.mean_answer_similarity),
+                      fmt(p.mean_encode_time_ms),
+                      fmt(p.mean_search_time_ms),
+                      fmt(p.mean_total_time_ms),
+                    ].join(','));
+                  }
+
+                  lines.push('');
+                  lines.push('pipeline,query_id,query_text,ndcg_at_k,recall_at_k,mrr_at_k,precision_at_k,answer_similarity,encode_time_ms,search_time_ms,total_time_ms');
+                  for (const p of pipelines) {
+                    for (const q of p.per_query) {
+                      lines.push([
+                        p.pipeline,
+                        q.query_id,
+                        esc(q.query_text),
+                        fmt(q.ndcg_at_k),
+                        fmt(q.recall_at_k),
+                        fmt(q.mrr),
+                        fmt(q.precision_at_k),
+                        fmt(q.answer_similarity),
+                        fmt(q.encode_time_ms),
+                        fmt(q.search_time_ms),
+                        fmt(q.total_time_ms),
+                      ].join(','));
+                    }
+                  }
+
+                  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `benchmark_${(result.dataset_id || DEFAULT_DATASET_ID).replace(/\//g, '-')}_k${effectiveK}_${ts}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }}>
+                  Exportar CSV
+                </Button>
+              </div>
+            )}
+
             {/* Grouped bar chart - metrics */}
             <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-sm font-semibold mb-4">Médias por Pipeline</p>
@@ -393,12 +476,12 @@ export default function BatchEvaluation() {
                       <th className="py-2 pr-2 cursor-pointer hover:text-foreground" onClick={() => toggleSort('query_text')}>
                         Query {sortField === 'query_text' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                       </th>
-                      {['nDCG', 'Recall', 'MRR', 'P@25', 'Ans.Sim.'].map(metric => {
+                      {[`nDCG`, `Recall`, `MRR`, `P@${effectiveK}`, 'Ans.Sim.'].map(metric => {
                         const metricKeys: Record<string, string> = {
                           'nDCG': 'ndcg_at_k',
                           'Recall': 'recall_at_k',
                           'MRR': 'mrr',
-                          'P@25': 'precision_at_k',
+                          [`P@${effectiveK}`]: 'precision_at_k',
                           'Ans.Sim.': 'answer_similarity',
                         };
                         const mk = metricKeys[metric];

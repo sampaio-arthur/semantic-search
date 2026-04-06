@@ -74,7 +74,7 @@ class SearchRequest(BaseModel):
     query: str
     query_id: str | None = None
     mode: str = "compare"
-    top_k: int = 25  # Kept for backward compatibility; backend always uses FIXED_TOP_K=25
+    top_k: int = 25
     chat_id: int | None = None
 
 
@@ -88,12 +88,13 @@ class GroundTruthUpsertRequest(BaseModel):
 class EvaluateRequest(BaseModel):
     dataset_id: str = "beir/trec-covid"
     pipeline: str = "compare"
-    k: int = 25  # Kept for backward compatibility; backend always uses FIXED_TOP_K=25
+    k: int = 25
 
 
 class BatchEvaluateRequest(BaseModel):
     dataset_id: str = "beir/trec-covid"
     pipelines: list[str] = ["classical", "quantum", "statistical"]
+    k: int = 25
 
 
 class BenchmarkLabelInput(BaseModel):

@@ -2,6 +2,7 @@ import { SearchResponse } from '@/lib/api';
 
 interface ComparisonPanelProps {
   response: SearchResponse | null;
+  topK?: number;
 }
 
 function metricNumber(value: number | null | undefined): number | null {
@@ -53,7 +54,7 @@ function MetricRow({ label, classical, quantum, statistical, hasStatistical }: M
   );
 }
 
-export function ComparisonPanel({ response }: ComparisonPanelProps) {
+export function ComparisonPanel({ response, topK = 25 }: ComparisonPanelProps) {
   if (!response) return null;
 
   const comparison = response.comparison;
@@ -73,27 +74,28 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
       statisticalMetrics?.has_ideal_answer
   );
 
+  const k = classicalMetrics?.k ?? topK;
   const metrics = [
     {
-      label: 'P@25',
+      label: `P@${k}`,
       c: metricNumber(classicalMetrics?.precision_at_k),
       q: metricNumber(quantumMetrics?.precision_at_k),
       s: metricNumber(statisticalMetrics?.precision_at_k),
     },
     {
-      label: 'Recall@25',
+      label: `Recall@${k}`,
       c: metricNumber(classicalMetrics?.recall_at_k),
       q: metricNumber(quantumMetrics?.recall_at_k),
       s: metricNumber(statisticalMetrics?.recall_at_k),
     },
     {
-      label: 'nDCG@25',
+      label: `nDCG@${k}`,
       c: metricNumber(classicalMetrics?.ndcg_at_k),
       q: metricNumber(quantumMetrics?.ndcg_at_k),
       s: metricNumber(statisticalMetrics?.ndcg_at_k),
     },
     {
-      label: 'MRR@25',
+      label: `MRR@${k}`,
       c: metricNumber((classicalMetrics as Record<string, unknown>)?.mrr as number | null),
       q: metricNumber((quantumMetrics as Record<string, unknown>)?.mrr as number | null),
       s: metricNumber((statisticalMetrics as Record<string, unknown>)?.mrr as number | null),

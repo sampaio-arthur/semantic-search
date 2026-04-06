@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import math
 
-FIXED_TOP_K: int = 25
+DEFAULT_TOP_K: int = 25
+ALLOWED_TOP_K: tuple[int, ...] = (10, 25, 50, 100)
 
 
 def l2_normalize(vector: list[float]) -> list[float]:

@@ -8,7 +8,6 @@ import numpy as np
 
 from audit import audit_print, category_log, preview_results, preview_text, preview_vector
 from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
-from domain.excluded_queries import is_excluded_query
 from domain.ideal_answers import IDEAL_ANSWERS
 from domain.exceptions import NotFoundError, ValidationError
 from domain.ports import (
@@ -219,11 +218,7 @@ class IndexDatasetUseCase:
         # ── Persist queries and qrels ─────────────────────────────────────────
         query_snapshot = []
         qrels_count = 0
-        excluded_count = 0
         for q in self.datasets.iter_queries(dataset_id):
-            if is_excluded_query(str(q["query_text"])):
-                excluded_count += 1
-                continue
             relevant_doc_ids = list(q.get("relevant_doc_ids") or [])
             qrels = {str(doc_id): int(rel) for doc_id, rel in (q.get("qrels") or {}).items()}
             query_snapshot.append(
@@ -263,9 +258,6 @@ class IndexDatasetUseCase:
                             ideal_answer=ideal,
                         )
                     )
-        if excluded_count > 0:
-            category_log("INDEX", excluded_queries=excluded_count, remaining_queries=len(query_snapshot))
-
         if self.dataset_snapshots is not None:
             subset = dataset_meta.get("subset") or {}
             self.dataset_snapshots.upsert(

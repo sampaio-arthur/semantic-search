@@ -55,12 +55,12 @@ Os singletons de encoder (`_classical_encoder`, `_quantum_encoder`, `_statistica
 1. **Passo 1**: itera todos os documentos do corpus, coleta textos
 2. **Fit**: encode em lote via SBERT → faz o fit dos tres encoders (ClassicalPipelineEncoder, QuantumPipelineEncoder, StatisticalPipelineEncoder)
 3. **Passo 2**: transforma cada documento com os tres encoders → upsert no banco (lotes de 64 docs)
-4. Persiste queries e qrels (ground truth do split `test`). Queries excluidas (11 de 50 no BEIR trec-covid) sao filtradas por `is_excluded_query()`, resultando em 39 queries validas
-5. Upsert do snapshot de metadados do dataset (com `query_count=39`)
+4. Persiste todas as queries e qrels (ground truth do split `test`) sem filtro de exclusao
+5. Upsert do snapshot de metadados do dataset
 
 ## Fluxo de Busca
 
-1. API recebe `query` + `dataset` + `mode` (`classical` | `quantum` | `statistical` | `compare`). O `top_k` e fixado em 25 (`FIXED_TOP_K` em `domain/ir.py`), ignorando qualquer valor enviado pelo cliente
+1. API recebe `query` + `dataset` + `mode` (`classical` | `quantum` | `statistical` | `compare`). O `top_k` e configuravel (10, 25, 50 ou 100, padrao 25 via `DEFAULT_TOP_K` em `domain/ir.py`)
 2. `SearchUseCase` chama `encode()` do(s) encoder(s) correspondente(s)
 3. Repositorio consulta apenas a coluna vetorial correspondente (`embedding_vector`, `quantum_vector` ou `statistical_vector`)
 4. Retorna ranking com score (cosine similarity = 1 - cosine_distance)
@@ -79,14 +79,9 @@ Servico: `AnswerSimilarityService` (`infrastructure/metrics/answer_similarity.py
 - Integrado em busca individual (`_attach_answer_similarity()`) e avaliacao batch (`EvaluateUseCase` → `mean_answer_similarity`)
 - Log emitido: `[SEMANTIC EVAL] query_id=... pipeline=... similarity=...`
 
-## Exclusao de queries
+## Exclusao de queries (desativada)
 
-11 queries do BEIR trec-covid sao excluidas por produzirem resultados inconsistentes. A lista esta em `domain/excluded_queries.py` (`EXCLUDED_QUERY_TEXTS`). A filtragem ocorre em dois niveis:
-
-1. **Indexacao**: `IndexDatasetUseCase` pula queries excluidas ao persistir queries/qrels
-2. **Repositorio (SQL)**: `SqlAlchemyGroundTruthRepository.list_by_dataset()` aplica `WHERE query_text NOT IN (...)` — nenhum endpoint ou use case precisa filtrar manualmente
-
-Resultado: apenas 39 queries validas sao usadas em todo o sistema (avaliacao, benchmarks, frontend).
+O mecanismo de exclusao de queries foi desativado. `EXCLUDED_QUERY_TEXTS` em `domain/excluded_queries.py` e um `frozenset` vazio, `is_excluded_query()` retorna sempre `False`, e `list_by_dataset()` nao aplica nenhum filtro de exclusao. O sistema usa todas as queries do dataset (ate 50 para trec-covid apos reindexacao).
 
 ## Observacoes
 
@@ -94,5 +89,5 @@ Resultado: apenas 39 queries validas sao usadas em todo o sistema (avaliacao, be
 - `score = 1 - cosine_distance(query_vector, doc_vector)`
 - Os pipelines diferem apenas na representacao vetorial, nao no mecanismo de ranking
 - Indexacao assincrona via `index_job_registry` com polling pelo frontend
-- Avaliacao batch assincrona via `evaluation_job_registry` (`infrastructure/api/evaluation_jobs.py`) com polling pelo frontend (`BatchEvaluation.tsx`)
-- `top_k` fixado em 25 via `FIXED_TOP_K` em `domain/ir.py`
+- Avaliacao batch assincrona via `evaluation_job_registry` (`infrastructure/api/evaluation_jobs.py`) com polling pelo frontend (`BatchEvaluation.tsx`), seletor de k e exportacao CSV
+- `top_k` configuravel (10, 25, 50, 100) via `ALLOWED_TOP_K` em `domain/ir.py`, padrao 25 (`DEFAULT_TOP_K`)

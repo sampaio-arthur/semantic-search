@@ -161,6 +161,7 @@ export interface BatchPipelineResult {
   mean_search_time_ms: number | null;
   mean_total_time_ms: number | null;
   query_count: number;
+  error_count?: number;
   per_query: BatchPerQueryResult[];
 }
 
@@ -491,7 +492,7 @@ class ApiClient {
     }
   }
 
-  async searchDataset(query: string, datasetId: string, queryId?: string): Promise<SearchResponse> {
+  async searchDataset(query: string, datasetId: string, queryId?: string, topK: number = 25): Promise<SearchResponse> {
     const response = await this.fetchWithAuth(`${API_BASE_URL}/search/dataset`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -500,7 +501,7 @@ class ApiClient {
         query,
         query_id: queryId,
         mode: 'compare',
-        top_k: 25,
+        top_k: topK,
       }),
     });
 
@@ -592,13 +593,14 @@ class ApiClient {
     }
   }
 
-  async startBatchEvaluation(datasetId: string = 'beir/trec-covid'): Promise<BatchEvaluationStatus> {
+  async startBatchEvaluation(datasetId: string = 'beir/trec-covid', k: number = 25): Promise<BatchEvaluationStatus> {
     const response = await this.fetchWithAuth(`${API_BASE_URL}/benchmarks/evaluate/start`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
         dataset_id: datasetId,
         pipelines: ['classical', 'quantum', 'statistical'],
+        k,
       }),
     });
 

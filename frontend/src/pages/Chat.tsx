@@ -28,6 +28,7 @@ export default function Chat() {
   const [prefillQuery, setPrefillQuery] = useState(searchParams.get('q') ?? '');
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
+  const [topK, setTopK] = useState<number>(25);
 
   const responseCacheKey = (id: number) => `qs:lastResponse:v2:${id}`;
 
@@ -127,7 +128,7 @@ export default function Chat() {
       await api.indexDataset(DEFAULT_DATASET_ID, false, (status) => {
         setIndexStatus(status.status === 'running' ? status : null);
       });
-      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
+      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID, undefined, topK);
 
       setLastResponse(searchResponse);
       if (conversationId) {
@@ -193,7 +194,18 @@ export default function Chat() {
             </Button>
           )}
           <h1 className="text-lg font-medium">Semantic Search</h1>
-          <span className="ml-auto text-xs text-muted-foreground">Top 25</span>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Top-k:</label>
+            <select
+              value={topK}
+              onChange={(e) => setTopK(Number(e.target.value))}
+              className="text-xs bg-background border border-border rounded px-2 py-1"
+            >
+              {[10, 25, 50, 100].map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
         </header>
 
         <div className={`flex-1 min-h-0 overflow-y-auto ${messages.length === 0 && !isLoading ? 'flex flex-col' : ''}`}>
@@ -204,7 +216,7 @@ export default function Chat() {
           )}
 
           <PipelinePanel response={lastResponse} />
-          <ComparisonPanel response={lastResponse} />
+          <ComparisonPanel response={lastResponse} topK={topK} />
         </div>
 
         <div className="pb-6 pt-2">

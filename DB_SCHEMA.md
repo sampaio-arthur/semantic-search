@@ -119,4 +119,4 @@ Constraint:
 ## Migrations
 
 - `001_add_ideal_answer_to_queries` — Adiciona coluna `ideal_answer TEXT` na tabela `queries`
-- `002_remove_excluded_queries` — Limpeza de dados na tabela `queries` e `qrels`; atualiza `query_count` em `dataset_snapshots`
+- `002_remove_excluded_queries` — Limpeza de dados na tabela `queries` e `qrels`; atualiza `query_count` em `dataset_snapshots`. Nota: a logica de exclusao foi desativada na aplicacao — reindexacao restaura as queries removidas por esta migration

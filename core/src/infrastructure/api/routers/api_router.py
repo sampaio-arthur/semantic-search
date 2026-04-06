@@ -9,7 +9,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from audit import audit_print, category_log, preview_text
 from domain.entities import Document, SearchResult
 from domain.exceptions import ConflictError, DomainError, NotFoundError, UnauthorizedError, ValidationError
-from domain.ir import FIXED_TOP_K
+from domain.ir import ALLOWED_TOP_K, DEFAULT_TOP_K
 from infrastructure.api.deps import Services, get_current_user_id, get_services
 from infrastructure.api.evaluation_jobs import evaluation_job_registry
 from infrastructure.api.index_jobs import index_job_registry
@@ -390,7 +390,7 @@ def compat_index_dataset_status(dataset_id: str, services: Services = Depends(ge
 
 
 def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Services) -> dict:
-    effective_top_k = FIXED_TOP_K
+    effective_top_k = payload.top_k if payload.top_k in ALLOWED_TOP_K else DEFAULT_TOP_K
     audit_print(
         "api.search.request",
         user_id=user_id,
@@ -488,8 +488,9 @@ def upsert_ground_truth(payload: GroundTruthUpsertRequest, user_id: int = Depend
 
 @router.post("/evaluate")
 def evaluate(payload: EvaluateRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    effective_k = payload.k if payload.k in ALLOWED_TOP_K else DEFAULT_TOP_K
     try:
-        return services.evaluate.execute(payload.dataset_id, payload.pipeline, FIXED_TOP_K)
+        return services.evaluate.execute(payload.dataset_id, payload.pipeline, effective_k)
     except DomainError as exc:
         raise _handle_domain_error(exc) from exc
 
@@ -651,6 +652,8 @@ def start_batch_evaluation(
     if not valid_gts:
         raise HTTPException(status_code=400, detail="No valid queries found")
 
+    effective_k = req.k if req.k in ALLOWED_TOP_K else DEFAULT_TOP_K
+
     current_status = evaluation_job_registry.status
     if current_status["status"] == "running":
         return {"accepted": False, "detail": "Evaluation already running", **current_status}
@@ -659,7 +662,7 @@ def start_batch_evaluation(
         services.evaluate.execute,
         dataset_id=req.dataset_id,
         pipelines=req.pipelines,
-        k=FIXED_TOP_K,
+        k=effective_k,
         query_count=len(valid_gts),
     )
     return {"accepted": started, **evaluation_job_registry.status}
