@@ -78,7 +78,6 @@ class EvaluationResult:
     ndcg_at_k: float
     mrr: float
     top_k_doc_ids: list[str]
-    answer_similarity: float | None = None
     encode_time_ms: float | None = None
     search_time_ms: float | None = None
     total_time_ms: float | None = None
@@ -92,7 +91,6 @@ class GroundTruth:
     dataset: str
     user_id: int | None = None
     created_at: datetime | None = None
-    ideal_answer: str | None = None
 
 
 @dataclass(slots=True)

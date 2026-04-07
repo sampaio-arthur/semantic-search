@@ -12,8 +12,6 @@ O frontend:
   - pipeline quantico-inspirado: SBERT → PCA_base → QCircuit → Hellinger → PCA_final → L2 (PennyLane)
   - pipeline estatistico: SBERT → PCA(128) → TruncatedSVD(64) → L2
 - exibe resultados, scores e latencia dos tres pipelines
-- permite cadastrar `ideal_answer` por query (paginas Benchmarks e EvaluationQueries)
-- exibe metrica de avaliacao semantica `answer_similarity` na comparacao
 
 ## Executar localmente
 

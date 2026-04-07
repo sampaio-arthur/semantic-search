@@ -68,11 +68,6 @@ export function ComparisonPanel({ response, topK = 25 }: ComparisonPanelProps) {
   const hasIrLabels = Boolean(
     classicalMetrics?.has_labels || quantumMetrics?.has_labels || statisticalMetrics?.has_labels
   );
-  const hasIdealAnswer = Boolean(
-    classicalMetrics?.has_ideal_answer ||
-      quantumMetrics?.has_ideal_answer ||
-      statisticalMetrics?.has_ideal_answer
-  );
 
   const k = classicalMetrics?.k ?? topK;
   const metrics = [
@@ -99,12 +94,6 @@ export function ComparisonPanel({ response, topK = 25 }: ComparisonPanelProps) {
       c: metricNumber((classicalMetrics as Record<string, unknown>)?.mrr as number | null),
       q: metricNumber((quantumMetrics as Record<string, unknown>)?.mrr as number | null),
       s: metricNumber((statisticalMetrics as Record<string, unknown>)?.mrr as number | null),
-    },
-    {
-      label: 'Answer Similarity',
-      c: metricNumber(classicalMetrics?.answer_similarity),
-      q: metricNumber(quantumMetrics?.answer_similarity),
-      s: metricNumber(statisticalMetrics?.answer_similarity),
     },
   ];
 
@@ -151,11 +140,6 @@ export function ComparisonPanel({ response, topK = 25 }: ComparisonPanelProps) {
           </div>
         )}
 
-        {hasIdealAnswer && (
-          <p className="text-[10px] text-muted-foreground">
-            Answer Similarity: similaridade semântica (cosseno) entre top-3 docs recuperados e a resposta ideal.
-          </p>
-        )}
       </div>
     </div>
   );

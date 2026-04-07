@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from audit import audit_print, category_log, preview_results, preview_text, preview_vector
-from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
-from domain.ideal_answers import IDEAL_ANSWERS
+from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline
 from domain.exceptions import NotFoundError, ValidationError
 from domain.ports import (
     DatasetProviderPort,
@@ -247,17 +246,6 @@ class IndexDatasetUseCase:
                     query_text=str(q["query_text"]),
                     qrels=qrels,
                 )
-                ideal = IDEAL_ANSWERS.get(str(q["query_id"]))
-                if ideal:
-                    self.ground_truths.upsert(
-                        GroundTruth(
-                            query_id=str(q["query_id"]),
-                            query_text=str(q["query_text"]),
-                            relevant_doc_ids=relevant_doc_ids,
-                            dataset=dataset_id,
-                            ideal_answer=ideal,
-                        )
-                    )
         if self.dataset_snapshots is not None:
             subset = dataset_meta.get("subset") or {}
             self.dataset_snapshots.upsert(
@@ -430,8 +418,6 @@ class SearchUseCase:
             "recall_at_k": None,
             "mrr": None,
             "ndcg_at_k": None,
-            "answer_similarity": None,
-            "has_ideal_answer": False,
             "encode_time_ms": encode_time_ms,
             "search_time_ms": search_time_ms,
             "total_time_ms": total_time_ms,
@@ -547,11 +533,11 @@ class UpsertGroundTruthUseCase:
     def __init__(self, ground_truths: GroundTruthRepositoryPort) -> None:
         self.ground_truths = ground_truths
 
-    def execute(self, dataset: str, query_id: str, query_text: str, relevant_doc_ids: list[str], user_id: int | None = None, ideal_answer: str | None = None) -> GroundTruth:
+    def execute(self, dataset: str, query_id: str, query_text: str, relevant_doc_ids: list[str], user_id: int | None = None) -> GroundTruth:
         if not relevant_doc_ids:
             raise ValidationError("relevant_doc_ids must not be empty.")
         return self.ground_truths.upsert(
-            GroundTruth(query_id=query_id, query_text=query_text, relevant_doc_ids=relevant_doc_ids, dataset=dataset, user_id=user_id, ideal_answer=ideal_answer)
+            GroundTruth(query_id=query_id, query_text=query_text, relevant_doc_ids=relevant_doc_ids, dataset=dataset, user_id=user_id)
         )
 
 
@@ -561,12 +547,10 @@ class EvaluateUseCase:
         ground_truths: GroundTruthRepositoryPort,
         search: SearchUseCase,
         metrics: MetricsPort,
-        answer_similarity=None,
     ) -> None:
         self.ground_truths = ground_truths
         self.search = search
         self.metrics = metrics
-        self.answer_similarity = answer_similarity
 
     def execute(self, dataset: str, pipeline: str = "compare", k: int = 10, progress_callback=None) -> dict:
         gts = self.ground_truths.list_by_dataset(dataset)
@@ -619,14 +603,6 @@ class EvaluateUseCase:
                     relevant_doc_ids=gt.relevant_doc_ids,
                     k=k,
                 )
-                sim = None
-                if gt.ideal_answer and self.answer_similarity is not None:
-                    answer_text = " ".join(item.text for item in items[:3])
-                    sim = self.answer_similarity.compute(answer_text, gt.ideal_answer)
-                    category_log(
-                        "SEMANTIC EVAL",
-                        _extra={"query_id": gt.query_id, "pipeline": current_pipeline, "similarity": round(sim, 4)},
-                    )
                 eval_result = EvaluationResult(
                     query_id=eval_result.query_id,
                     query_text=eval_result.query_text,
@@ -636,7 +612,6 @@ class EvaluateUseCase:
                     ndcg_at_k=eval_result.ndcg_at_k,
                     mrr=eval_result.mrr,
                     top_k_doc_ids=eval_result.top_k_doc_ids,
-                    answer_similarity=sim,
                     encode_time_ms=encode_time,
                     search_time_ms=search_time,
                     total_time_ms=total_time,
@@ -645,8 +620,6 @@ class EvaluateUseCase:
             error_counts[current_pipeline] = error_count
             completed_pipelines.append(current_pipeline)
             n = max(len(per_query), 1)
-            sims = [x.answer_similarity for x in per_query if x.answer_similarity is not None]
-            mean_sim = sum(sims) / len(sims) if sims else None
             encode_times = [x.encode_time_ms for x in per_query if x.encode_time_ms is not None]
             search_times = [x.search_time_ms for x in per_query if x.search_time_ms is not None]
             total_times = [x.total_time_ms for x in per_query if x.total_time_ms is not None]
@@ -659,7 +632,6 @@ class EvaluateUseCase:
                     mean_recall_at_k=sum(x.recall_at_k for x in per_query) / n,
                     mean_ndcg_at_k=sum(x.ndcg_at_k for x in per_query) / n,
                     mean_mrr=sum(x.mrr for x in per_query) / n,
-                    mean_answer_similarity=mean_sim,
                     mean_encode_time_ms=sum(encode_times) / len(encode_times) if encode_times else None,
                     mean_search_time_ms=sum(search_times) / len(search_times) if search_times else None,
                     mean_total_time_ms=sum(total_times) / len(total_times) if total_times else None,
@@ -676,7 +648,6 @@ class EvaluateUseCase:
                     "mean_recall_at_k": agg.mean_recall_at_k,
                     "mean_ndcg_at_k": agg.mean_ndcg_at_k,
                     "mean_mrr": agg.mean_mrr,
-                    "mean_answer_similarity": agg.mean_answer_similarity,
                     "mean_encode_time_ms": agg.mean_encode_time_ms,
                     "mean_search_time_ms": agg.mean_search_time_ms,
                     "mean_total_time_ms": agg.mean_total_time_ms,
@@ -691,7 +662,6 @@ class EvaluateUseCase:
                             "ndcg_at_k": q.ndcg_at_k,
                             "mrr": q.mrr,
                             "top_k_doc_ids": q.top_k_doc_ids,
-                            "answer_similarity": q.answer_similarity,
                             "encode_time_ms": q.encode_time_ms,
                             "search_time_ms": q.search_time_ms,
                             "total_time_ms": q.total_time_ms,

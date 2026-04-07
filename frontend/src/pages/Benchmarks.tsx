@@ -88,7 +88,7 @@ export default function Benchmarks() {
     queryFilter === '' || q.query.toLowerCase().includes(queryFilter.toLowerCase())
   );
 
-  const withAnswer = queries.filter((q) => q.ideal_answer).length;
+  const totalQueries = queries.length;
 
   if (authLoading) {
     return <div className='min-h-screen bg-background' />;
@@ -101,7 +101,7 @@ export default function Benchmarks() {
           <div>
             <h1 className='text-2xl font-semibold'>Gabaritos de Acuracia</h1>
             <p className='text-sm text-muted-foreground'>
-              Cadastre pergunta para inferir docs relevantes. As respostas ideais sao fixadas pelo sistema.
+              Cadastre pergunta para inferir docs relevantes.
             </p>
           </div>
           <Button variant='outline' onClick={() => navigate('/chat')}>Voltar ao Chat</Button>
@@ -132,13 +132,12 @@ export default function Benchmarks() {
           {message && <p className='text-sm text-muted-foreground'>{message}</p>}
         </div>
 
-        {/* Queries existentes do dataset (read-only ideal_answer) */}
         <div className='rounded-xl border border-border p-4 space-y-3'>
           <div className='flex items-center justify-between gap-2'>
             <div>
               <h2 className='text-lg font-medium'>Queries do dataset</h2>
               <p className='text-xs text-muted-foreground'>
-                {withAnswer} de {queries.length} queries com resposta ideal atribuida
+                {totalQueries} queries disponíveis
               </p>
             </div>
           </div>
@@ -160,7 +159,7 @@ export default function Benchmarks() {
               {filteredQueries.map((q) => (
                 <div
                   key={q.query_id}
-                  className={`rounded-lg border p-3 space-y-2 ${q.ideal_answer ? 'border-green-600/40 bg-green-950/10' : 'border-border'}`}
+                  className="rounded-lg border border-border p-3 space-y-2"
                 >
                   <div className='flex items-start justify-between gap-2'>
                     <div className='flex-1 min-w-0'>
@@ -168,13 +167,6 @@ export default function Benchmarks() {
                       <p className='text-sm mt-0.5'>{q.query}</p>
                     </div>
                   </div>
-
-                  {q.ideal_answer && (
-                    <div className='pl-0 space-y-0.5'>
-                      <p className='text-xs font-medium text-green-400'>Resposta ideal</p>
-                      <p className='text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3'>{q.ideal_answer}</p>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -194,12 +186,6 @@ export default function Benchmarks() {
                     <div className='space-y-1'>
                       <p className='text-sm font-semibold'>Pergunta</p>
                       <p className='text-sm text-muted-foreground'>{item.query_text}</p>
-                      {item.ideal_answer && (
-                        <>
-                          <p className='text-sm font-semibold pt-2'>Resposta ideal</p>
-                          <p className='text-sm text-muted-foreground whitespace-pre-wrap'>{item.ideal_answer}</p>
-                        </>
-                      )}
                       <p className='text-xs text-muted-foreground pt-1'>Docs relevantes inferidos: {item.relevant_doc_ids.length}</p>
                     </div>
                     <Button variant='destructive' size='sm' onClick={() => handleDelete(item)} disabled={isBusy}>Excluir</Button>

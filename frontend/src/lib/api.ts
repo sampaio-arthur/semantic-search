@@ -60,7 +60,6 @@ export interface BenchmarkLabel {
   benchmark_id: string;
   dataset_id: string;
   query_text: string;
-  ideal_answer: string;
   relevant_doc_ids: string[];
 }
 
@@ -76,8 +75,6 @@ export interface SearchMetrics {
   mrr?: number | null;
   ndcg_at_k?: number | null;
   spearman?: number | null;
-  answer_similarity?: number | null;
-  has_ideal_answer: boolean;
   encode_time_ms: number;
   search_time_ms: number;
   total_time_ms: number;
@@ -128,7 +125,6 @@ export interface SearchResponse {
 export interface EvaluationQuery {
   query_id: string;
   query: string;
-  ideal_answer: string | null;
 }
 
 export interface BatchEvaluationStatus {
@@ -156,7 +152,6 @@ export interface BatchPipelineResult {
   mean_recall_at_k: number;
   mean_ndcg_at_k: number;
   mean_mrr: number;
-  mean_answer_similarity: number | null;
   mean_encode_time_ms: number | null;
   mean_search_time_ms: number | null;
   mean_total_time_ms: number | null;
@@ -172,7 +167,6 @@ export interface BatchPerQueryResult {
   recall_at_k: number;
   ndcg_at_k: number;
   mrr: number;
-  answer_similarity: number | null;
   encode_time_ms: number | null;
   search_time_ms: number | null;
   total_time_ms: number | null;

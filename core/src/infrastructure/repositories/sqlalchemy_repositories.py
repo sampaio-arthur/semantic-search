@@ -180,7 +180,7 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
                 "doc_id": doc.doc_id,
                 "title": doc.title,
                 "text": doc.text,
-                "metadata": doc.metadata,
+                "metadata_json": doc.metadata,
                 "embedding_vector": doc.embedding_vector,
                 "quantum_vector": doc.quantum_vector,
                 "statistical_vector": doc.statistical_vector,
@@ -193,7 +193,7 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
             set_={
                 "title": stmt.excluded.title,
                 "text": stmt.excluded.text,
-                "metadata": stmt.excluded.metadata,
+                "metadata": stmt.excluded["metadata"],
                 "embedding_vector": stmt.excluded.embedding_vector,
                 "quantum_vector": stmt.excluded.quantum_vector,
                 "statistical_vector": stmt.excluded.statistical_vector,
@@ -284,11 +284,9 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
             select(QueryModel).where(QueryModel.dataset == item.dataset, QueryModel.split == "test", QueryModel.query_id == item.query_id)
         )
         row.user_id = item.user_id
-        if item.ideal_answer is not None:
-            row.ideal_answer = item.ideal_answer
         self.session.commit()
         self.session.refresh(row)
-        return GroundTruth(row.query_id, row.query_text, list(item.relevant_doc_ids), row.dataset, row.user_id, row.created_at, row.ideal_answer)
+        return GroundTruth(row.query_id, row.query_text, list(item.relevant_doc_ids), row.dataset, row.user_id, row.created_at)
 
     def upsert_qrels(self, dataset: str, split: str, query_id: str, query_text: str, qrels: dict[str, int]) -> None:
         row = self.session.scalar(
@@ -334,11 +332,10 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
             .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
         ).all()
         relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
-        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer)
+        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at)
 
     def get_by_query_text(self, dataset: str, query_text: str) -> GroundTruth | None:
         normalized = query_text.strip().lower()
-        # Prefer entries that have an ideal_answer set (nulls last)
         row = self.session.scalar(
             select(QueryModel)
             .where(
@@ -346,7 +343,6 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
                 QueryModel.split == "test",
                 sa_func.lower(sa_func.trim(QueryModel.query_text)) == normalized,
             )
-            .order_by(QueryModel.ideal_answer.desc().nullslast())
             .limit(1)
         )
         if not row:
@@ -357,7 +353,7 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
             .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
         ).all()
         relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
-        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at, row.ideal_answer)
+        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at)
 
     def list_by_dataset(self, dataset: str) -> list[GroundTruth]:
         rows = self.session.scalars(
@@ -394,7 +390,6 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
                 row.dataset,
                 row.user_id,
                 row.created_at,
-                row.ideal_answer,
             )
             for row in rows
         ]

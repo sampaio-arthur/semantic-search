@@ -38,11 +38,10 @@ function metricOptions(k: number) {
     { key: 'recall_at_k' as const, label: `Recall@${k}` },
     { key: 'mrr' as const, label: `MRR@${k}` },
     { key: 'precision_at_k' as const, label: `Precision@${k}` },
-    { key: 'answer_similarity' as const, label: 'Answer Similarity' },
   ];
 }
 
-type MetricKey = 'ndcg_at_k' | 'recall_at_k' | 'mrr' | 'precision_at_k' | 'answer_similarity';
+type MetricKey = 'ndcg_at_k' | 'recall_at_k' | 'mrr' | 'precision_at_k';
 
 function formatTimestamp(ts: number): string {
   return new Date(ts).toLocaleString('pt-BR');
@@ -148,7 +147,6 @@ export default function BatchEvaluation() {
     { metric: `Recall@${effectiveK}`, ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_recall_at_k])) },
     { metric: `MRR@${effectiveK}`, ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_mrr])) },
     { metric: `P@${effectiveK}`, ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_precision_at_k])) },
-    { metric: 'Ans. Sim.', ...Object.fromEntries(pipelines.map(p => [p.pipeline, p.mean_answer_similarity ?? 0])) },
   ];
 
   // Latency chart data
@@ -164,7 +162,6 @@ export default function BatchEvaluation() {
     { label: `Recall@${effectiveK}`, key: 'mean_recall_at_k' as const },
     { label: `MRR@${effectiveK}`, key: 'mean_mrr' as const },
     { label: `Precision@${effectiveK}`, key: 'mean_precision_at_k' as const },
-    { label: 'Answer Similarity', key: 'mean_answer_similarity' as const },
   ];
 
   function getBest(key: string): string {
@@ -196,7 +193,6 @@ export default function BatchEvaluation() {
       entry[`${p.pipeline}_recall_at_k`] = q.recall_at_k;
       entry[`${p.pipeline}_mrr`] = q.mrr;
       entry[`${p.pipeline}_precision_at_k`] = q.precision_at_k;
-      entry[`${p.pipeline}_answer_similarity`] = q.answer_similarity;
     }
   }
 
@@ -312,7 +308,7 @@ export default function BatchEvaluation() {
                   const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '');
                   const lines: string[] = [];
 
-                  lines.push('pipeline,k,query_count,error_count,mean_ndcg_at_k,mean_recall_at_k,mean_mrr_at_k,mean_precision_at_k,mean_answer_similarity,mean_encode_time_ms,mean_search_time_ms,mean_total_time_ms');
+                  lines.push('pipeline,k,query_count,error_count,mean_ndcg_at_k,mean_recall_at_k,mean_mrr_at_k,mean_precision_at_k,mean_encode_time_ms,mean_search_time_ms,mean_total_time_ms');
                   for (const p of pipelines) {
                     lines.push([
                       p.pipeline,
@@ -323,7 +319,6 @@ export default function BatchEvaluation() {
                       fmt(p.mean_recall_at_k),
                       fmt(p.mean_mrr),
                       fmt(p.mean_precision_at_k),
-                      fmt(p.mean_answer_similarity),
                       fmt(p.mean_encode_time_ms),
                       fmt(p.mean_search_time_ms),
                       fmt(p.mean_total_time_ms),
@@ -331,7 +326,7 @@ export default function BatchEvaluation() {
                   }
 
                   lines.push('');
-                  lines.push('pipeline,query_id,query_text,ndcg_at_k,recall_at_k,mrr_at_k,precision_at_k,answer_similarity,encode_time_ms,search_time_ms,total_time_ms');
+                  lines.push('pipeline,query_id,query_text,ndcg_at_k,recall_at_k,mrr_at_k,precision_at_k,encode_time_ms,search_time_ms,total_time_ms');
                   for (const p of pipelines) {
                     for (const q of p.per_query) {
                       lines.push([
@@ -342,7 +337,6 @@ export default function BatchEvaluation() {
                         fmt(q.recall_at_k),
                         fmt(q.mrr),
                         fmt(q.precision_at_k),
-                        fmt(q.answer_similarity),
                         fmt(q.encode_time_ms),
                         fmt(q.search_time_ms),
                         fmt(q.total_time_ms),
@@ -476,13 +470,12 @@ export default function BatchEvaluation() {
                       <th className="py-2 pr-2 cursor-pointer hover:text-foreground" onClick={() => toggleSort('query_text')}>
                         Query {sortField === 'query_text' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                       </th>
-                      {[`nDCG`, `Recall`, `MRR`, `P@${effectiveK}`, 'Ans.Sim.'].map(metric => {
+                      {[`nDCG`, `Recall`, `MRR`, `P@${effectiveK}`].map(metric => {
                         const metricKeys: Record<string, string> = {
                           'nDCG': 'ndcg_at_k',
                           'Recall': 'recall_at_k',
                           'MRR': 'mrr',
                           [`P@${effectiveK}`]: 'precision_at_k',
-                          'Ans.Sim.': 'answer_similarity',
                         };
                         const mk = metricKeys[metric];
                         return ['classical', 'quantum', 'statistical'].map(pl => {
@@ -501,7 +494,7 @@ export default function BatchEvaluation() {
                     {sortedQueries.map((q, idx) => (
                       <tr key={q.query_id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
                         <td className="py-1.5 pr-2 max-w-[200px] truncate" title={q.query_text}>{q.query_text}</td>
-                        {['ndcg_at_k', 'recall_at_k', 'mrr', 'precision_at_k', 'answer_similarity'].flatMap(mk =>
+                        {['ndcg_at_k', 'recall_at_k', 'mrr', 'precision_at_k'].flatMap(mk =>
                           ['classical', 'quantum', 'statistical'].map(pl => {
                             const val = q[`${pl}_${mk}`];
                             return (

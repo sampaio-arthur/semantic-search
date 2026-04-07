@@ -193,35 +193,7 @@ Dois mecanismos de log coexistem:
    [TIME] pipeline=classical total_time_ms=6.3
    [METRICS INPUT] pipeline=classical run_docs=25 qrels_docs=3
    [METRICS RESULT] pipeline=classical nDCG@25=0.42 Recall@25=0.38 MRR=0.51 P@25=0.21
-   [SEMANTIC EVAL] query_id=1 pipeline=classical similarity=0.7341
    ```
-
-## Avaliacao semantica (answer_similarity)
-
-Arquivo: `core/src/infrastructure/metrics/answer_similarity.py` (`AnswerSimilarityService`)
-
-Calcula a similaridade semantica entre o texto recuperado e uma resposta ideal cadastrada (`ideal_answer`).
-
-**Metodo**:
-
-```
-embed(top3_text) · embed(ideal_answer)
-──────────────────────────────────────  =  cosine_similarity
-  ||embed(top3_text)|| × ||embed(ideal_answer)||
-```
-
-Onde `top3_text = " ".join(doc.text for doc in results[:3])` — concatenacao dos tres primeiros documentos recuperados.
-
-**Modelo de embedding**: mesmo `all-MiniLM-L6-v2` compartilhado pelos encoders via `SharedSbertBase`.
-
-**Comportamento especial**: vetor de norma zero retorna `0.0` com log explicito.
-
-**Retorno**: float em `[-1, 1]` arredondado a 4 casas decimais.
-
-**Integracao**:
-- Busca individual: `_attach_answer_similarity()` em `api_router.py` — calcula por pipeline apos cada busca se `ideal_answer` existir para a query
-- Avaliacao batch: `EvaluateUseCase` — calcula por query, agrega como `mean_answer_similarity`
-- Frontend: `ComparisonPanel.tsx` exibe linha "Answer Similarity" por pipeline
 
 ## Lote de indexacao
 

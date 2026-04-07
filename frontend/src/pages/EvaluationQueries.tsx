@@ -39,7 +39,7 @@ export default function EvaluationQueries() {
     navigate(`/chat?q=${encodeURIComponent(query)}`);
   };
 
-  const withAnswer = queries.filter((q) => q.ideal_answer).length;
+  const totalQueries = queries.length;
 
   if (authLoading) {
     return (
@@ -69,7 +69,7 @@ export default function EvaluationQueries() {
           </p>
           {queries.length > 0 && (
             <p className="text-xs text-muted-foreground shrink-0 ml-4">
-              {withAnswer}/{queries.length} com gabarito
+              {totalQueries} queries
             </p>
           )}
         </div>
@@ -94,7 +94,7 @@ export default function EvaluationQueries() {
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left px-4 py-3 text-muted-foreground font-medium w-32">#</th>
-                  <th className="text-left px-4 py-3 text-muted-foreground font-medium">Query / Gabarito</th>
+                  <th className="text-left px-4 py-3 text-muted-foreground font-medium">Query</th>
                   <th className="px-4 py-3 w-40" />
                 </tr>
               </thead>
@@ -107,14 +107,8 @@ export default function EvaluationQueries() {
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground align-top">
                       {idx + 1}
                     </td>
-                    <td className="px-4 py-3 align-top space-y-2">
+                    <td className="px-4 py-3 align-top">
                       <p>{q.query}</p>
-
-                      {q.ideal_answer && (
-                        <p className="text-xs text-green-400 line-clamp-2">
-                          ✓ {q.ideal_answer}
-                        </p>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-right align-top">
                       <Button

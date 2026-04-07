@@ -100,7 +100,6 @@ class BatchEvaluateRequest(BaseModel):
 class BenchmarkLabelInput(BaseModel):
     dataset_id: str
     query_text: str
-    ideal_answer: str | None = None
     relevant_doc_ids: list[str] | None = None
 
 

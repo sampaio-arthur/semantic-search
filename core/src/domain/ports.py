@@ -107,7 +107,6 @@ class EvaluationAggregate:
     mean_recall_at_k: float
     mean_ndcg_at_k: float
     mean_mrr: float
-    mean_answer_similarity: float | None = None
     mean_encode_time_ms: float | None = None
     mean_search_time_ms: float | None = None
     mean_total_time_ms: float | None = None

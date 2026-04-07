@@ -131,7 +131,6 @@ def _attach_ir_metrics(
             output["comparison"][pipeline_key]["metrics"] = _enrich_metrics(
                 pipeline_data.get("metrics"), pipeline_eval, k
             )
-        _attach_answer_similarity(output, gt, services)
         return
     if output.get("mode") in {"classical", "quantum", "statistical"}:
         results = output.get("results") or []
@@ -145,41 +144,6 @@ def _attach_ir_metrics(
             k=k,
         )
         output["metrics"] = _enrich_metrics(output.get("metrics"), eval_result, k)
-        _attach_answer_similarity(output, gt, services)
-
-
-def _attach_answer_similarity(output: dict[str, Any], gt, services: Services) -> None:
-    if not gt.ideal_answer:
-        return
-    if "comparison" in output:
-        for pipeline_key in ("classical", "quantum", "statistical"):
-            pipeline_data = output["comparison"].get(pipeline_key)
-            if not pipeline_data:
-                continue
-            results = pipeline_data.get("results") or []
-            answer_text = " ".join(r["text"] for r in results[:3])
-            similarity = services.answer_similarity.compute(answer_text, gt.ideal_answer)
-            metrics = pipeline_data.get("metrics") or {}
-            metrics["answer_similarity"] = round(similarity, 4)
-            metrics["has_ideal_answer"] = True
-            pipeline_data["metrics"] = metrics
-            category_log(
-                "SEMANTIC EVAL",
-                _extra={"query_id": gt.query_id, "pipeline": pipeline_key, "similarity": round(similarity, 4)},
-            )
-        return
-    if output.get("mode") in {"classical", "quantum", "statistical"}:
-        results = output.get("results") or []
-        answer_text = " ".join(r["text"] for r in results[:3])
-        similarity = services.answer_similarity.compute(answer_text, gt.ideal_answer)
-        metrics = output.get("metrics") or {}
-        metrics["answer_similarity"] = round(similarity, 4)
-        metrics["has_ideal_answer"] = True
-        output["metrics"] = metrics
-        category_log(
-            "SEMANTIC EVAL",
-            _extra={"query_id": gt.query_id, "pipeline": output["mode"], "similarity": round(similarity, 4)},
-        )
 
 
 @router.get("/health")
@@ -243,6 +207,7 @@ def reset_password(payload: ResetPasswordRequest, services: Services = Depends(g
 
 
 @router.post("/auth/refresh", response_model=TokenOut)
+@compat_router.post("/auth/refresh", response_model=TokenOut)
 def refresh_token(payload: RefreshTokenRequest, services: Services = Depends(get_services)):
     try:
         return services.refresh.execute(payload.refresh_token)
@@ -578,7 +543,6 @@ def list_benchmark_labels(dataset_id: str, services: Services = Depends(get_serv
                 "benchmark_id": item.query_id,
                 "dataset_id": item.dataset,
                 "query_text": item.query_text,
-                "ideal_answer": item.ideal_answer or "",
                 "relevant_doc_ids": item.relevant_doc_ids,
             }
             for item in items
@@ -609,7 +573,6 @@ def upsert_benchmark_label(payload: BenchmarkLabelInput, user_id: int = Depends(
         "benchmark_id": item.query_id,
         "dataset_id": item.dataset,
         "query_text": item.query_text,
-        "ideal_answer": item.ideal_answer or "",
         "relevant_doc_ids": item.relevant_doc_ids,
     }
 
@@ -625,7 +588,7 @@ def delete_benchmark_label(dataset_id: str, benchmark_id: str, services: Service
 def list_evaluation_queries(dataset_id: str = "beir/trec-covid", services: Services = Depends(get_services)):
     items = services.ground_truths.list_by_dataset(dataset_id)
     return [
-        {"query_id": item.query_id, "query": item.query_text, "ideal_answer": item.ideal_answer}
+        {"query_id": item.query_id, "query": item.query_text}
         for item in items
     ]
 

@@ -126,7 +126,7 @@ Tambem existe persistencia estruturada pelo backend:
 
 Tabelas usadas:
 
-- `queries` (`dataset`, `split`, `query_id`, `query_text`, `ideal_answer`)
+- `queries` (`dataset`, `split`, `query_id`, `query_text`)
 - `qrels` (`dataset`, `split`, `query_id`, `doc_id`, `relevance`)
 
 Para compatibilidade com o fluxo atual de avaliacao, o repositorio monta `relevant_doc_ids` a partir de `qrels` com `relevance > 0`. `list_by_dataset()` retorna todas as queries do dataset sem filtro de exclusao.
@@ -136,10 +136,6 @@ Para compatibilidade com o fluxo atual de avaliacao, o repositorio monta `releva
 - API canonica: `POST /api/ground-truth`
 - API compativel usada pelo frontend: `POST /benchmarks/labels`
 
-Importante sobre `ideal_answer`:
-
-- O frontend envia `ideal_answer`
-- A rota compativel (`POST /benchmarks/labels`) persiste `ideal_answer` quando o campo e enviado (coluna `ideal_answer TEXT NULL` na tabela `queries`)
 - Se `relevant_doc_ids` nao forem enviados, o backend infere um ground truth inicial usando busca classica top-5 e salva esses `doc_ids`
 
 ### Avaliacao batch
@@ -151,9 +147,8 @@ Fluxo:
 1. Le gabaritos do dataset via `list_by_dataset()` (retorna todas as queries do dataset)
 2. Executa busca por `query_text` no(s) pipeline(s) com `top_k` configuravel (10, 25, 50 ou 100; padrao 25)
 3. Calcula metricas IR por query via `IrMeasuresAdapter`
-4. Se `ideal_answer` estiver definido na query, calcula `answer_similarity` via `AnswerSimilarityService`
-5. Captura timing por query (`encode_time_ms`, `search_time_ms`, `total_time_ms`)
-6. Agrega medias por pipeline (metricas IR + `mean_answer_similarity` + `mean_encode_time_ms`, `mean_search_time_ms`, `mean_total_time_ms`)
+4. Captura timing por query (`encode_time_ms`, `search_time_ms`, `total_time_ms`)
+5. Agrega medias por pipeline (metricas IR + `mean_encode_time_ms`, `mean_search_time_ms`, `mean_total_time_ms`)
 
 A avaliacao batch pode ser executada de forma assincrona via `EvaluationJobRegistry` (`infrastructure/api/evaluation_jobs.py`), com progresso rastreado por query e pipeline. O frontend (`BatchEvaluation.tsx`) faz polling no status, exibe graficos comparativos (Recharts), permite selecionar o valor de k (10, 25, 50 ou 100) e exportar os resultados em CSV.
 
@@ -164,65 +159,7 @@ Metricas de retrieval calculadas (via biblioteca `ir_measures`, sem implementaca
 - `MRR@k` — Mean Reciprocal Rank
 - `P@k` — Precision at k
 
-Metrica de avaliacao semantica:
-
-- `answer_similarity` — similaridade cosseno entre o embedding SBERT dos top-3 documentos recuperados (concatenados) e o embedding do `ideal_answer`. Calculada por `AnswerSimilarityService` (`infrastructure/metrics/answer_similarity.py`) usando o mesmo modelo `all-MiniLM-L6-v2` compartilhado pelos encoders.
-
 **Nota sobre top_k e metricas**: o valor de `top_k` e configuravel pelo usuario entre 10, 25, 50 e 100 (`ALLOWED_TOP_K` em `domain/ir.py`, padrao `DEFAULT_TOP_K = 25`). Controla tanto o numero de documentos retornados pela query SQL quanto o conjunto sobre o qual as metricas IR sao calculadas. O frontend permite selecionar o valor tanto na busca individual quanto na avaliacao batch.
-
-## Avaliacao semantica (ideal_answer / answer_similarity)
-
-O sistema implementa avaliacao semantica da qualidade das respostas recuperadas com base em uma resposta ideal cadastrada por query.
-
-### Persistencia
-
-- A coluna `ideal_answer TEXT NULL` existe na tabela `queries` (adicionada via migration `001_add_ideal_answer_to_queries.py`)
-- O campo e persistido pelo `SqlAlchemyGroundTruthRepository.upsert()` quando nao-nulo
-- O dominio representa o campo em `GroundTruth.ideal_answer: str | None`
-
-### Edicao via frontend
-
-- Pagina `EvaluationQueries.tsx`: lista todas as queries do dataset com botao para editar o `ideal_answer` inline; exibe contador "N/total com gabarito"
-- Pagina `Benchmarks.tsx`: formulario manual para criar benchmark labels com `ideal_answer`
-- Ambas as paginas chamam `api.upsertBenchmarkLabel()` que envia `ideal_answer` via `POST /benchmarks/labels`
-
-### Calculo de answer_similarity
-
-Servico: `AnswerSimilarityService` (`infrastructure/metrics/answer_similarity.py`)
-
-- Usa o mesmo modelo SBERT (`all-MiniLM-L6-v2`) compartilhado pelos encoders via `SharedSbertBase`
-- Calcula similaridade cosseno entre dois textos: `cosine_similarity(embed(text_a), embed(text_b))`
-- Trata caso de vetor nulo (retorna `0.0` com log explicito)
-- Retorna valor em `[-1, 1]` arredondado a 4 casas decimais
-
-### Construcao do texto de resposta recuperada
-
-Para calcular `answer_similarity`, o sistema:
-
-1. Concatena os textos dos top-3 documentos recuperados: `" ".join(doc.text for doc in results[:3])`
-2. Computa `cosine_similarity(embed(top3_text), embed(ideal_answer))`
-
-O metodo e identico para todos os pipelines.
-
-### Integracao no fluxo de busca
-
-- `_attach_answer_similarity()` em `api_router.py`: chamado apos cada busca; verifica se existe ground truth com `ideal_answer` para a query e calcula a similaridade por pipeline
-- `EvaluateUseCase`: calcula `answer_similarity` por query em avaliacao batch; agrega como `mean_answer_similarity`
-- `ComparisonPanel.tsx`: exibe linha "Answer Similarity" na tabela de comparacao dos tres pipelines
-
-### Logs
-
-```
-[SEMANTIC EVAL] query_id=... pipeline=classical similarity=0.7341
-```
-
-Tambem emitido via `audit_print()`:
-
-```
-{"event": "answer_similarity.compute.completed", "similarity": 0.7341}
-```
-
----
 
 ## API (resumo de operacao)
 
@@ -254,7 +191,7 @@ Tambem emitido via `audit_print()`:
 - `/benchmarks/labels*`
 - `/benchmarks/evaluate/start` — inicia avaliacao batch assincrona
 - `/benchmarks/evaluate/status` — polling do status da avaliacao batch
-- `/evaluation/queries` — lista queries BEIR com ideal answers
+- `/evaluation/queries` — lista queries BEIR
 
 Rota descontinuada mantida apenas para retorno de erro:
 
