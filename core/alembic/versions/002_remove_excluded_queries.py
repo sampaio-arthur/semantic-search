@@ -1,15 +1,4 @@
-"""Remove excluded queries and their qrels from the database.
 
-Revision ID: 002
-Revises: 001
-Create Date: 2026-03-19
-
-NOTE: The query exclusion mechanism was deactivated in the application layer
-(EXCLUDED_QUERY_TEXTS is now empty, is_excluded_query() always returns False,
-and list_by_dataset() no longer filters queries). This migration's data
-deletions are not reverted here — re-indexing the dataset will restore
-all 50 queries.
-"""
 from __future__ import annotations
 
 import sqlalchemy as sa

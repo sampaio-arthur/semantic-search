@@ -21,11 +21,11 @@ Todos os tres encoders vivem em `infrastructure/encoders/` e compartilham `Share
 
 **Padrão fit/transform**: todos os encoders exigem `fit(raw_embeddings)` antes de `encode()`/`transform()`. O fit ocorre uma vez durante a indexacao (dois passos: coleta todos os textos → encode em lote pelo SBERT → faz o fit dos tres encoders → transforma + upsert).
 
-| Encoder | Arquivo | Transformacao |
-|---|---|---|
-| `ClassicalPipelineEncoder` | `encoders/classical.py` | SBERT(384) → PCA(64) → L2 |
-| `QuantumPipelineEncoder` | `encoders/quantum.py` | SBERT(384) → PCA_base(64) → PCA_angles(6) → AngleEmbedding+StronglyEntanglingLayers → probs(64) → sqrt(probs) → concat(128) → PCA_final(64) → L2 |
-| `StatisticalPipelineEncoder` | `encoders/statistical.py` | SBERT(384) → PCA(128) → TruncatedSVD(64) → L2 |
+| Encoder                      | Arquivo                   | Transformacao                                                                                                                                    |
+| ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ClassicalPipelineEncoder`   | `encoders/classical.py`   | SBERT(384) → PCA(64) → L2                                                                                                                        |
+| `QuantumPipelineEncoder`     | `encoders/quantum.py`     | SBERT(384) → PCA_base(64) → PCA_angles(6) → AngleEmbedding+StronglyEntanglingLayers → probs(64) → sqrt(probs) → concat(128) → PCA_final(64) → L2 |
+| `StatisticalPipelineEncoder` | `encoders/statistical.py` | SBERT(384) → PCA(128) → TruncatedSVD(64) → L2                                                                                                    |
 
 Os singletons de encoder (`_classical_encoder`, `_quantum_encoder`, `_statistical_encoder`) sao criados uma vez na primeira requisicao e reutilizados. O estado fitted (PCAs, SVD) persiste entre requisicoes e tambem sobrevive a reinicializacoes do container: apos o fit, cada encoder serializa seu estado em disco via `joblib` (`save_state`/`load_state`), e na inicializacao do container o estado e recarregado automaticamente. Diretorio configuravel via `ENCODER_STATE_DIR` (default `core/data/encoder_state/` no host).
 
@@ -66,10 +66,6 @@ Os singletons de encoder (`_classical_encoder`, `_quantum_encoder`, `_statistica
 4. Retorna ranking com score (cosine similarity = 1 - cosine_distance)
 5. Opcional: enriquecimento com metricas IR via `IrMeasuresAdapter` se ground truth (`qrels`) existir para a query
 6. Opcional: persistencia de mensagem `assistant` no chat
-
-## Exclusao de queries (desativada)
-
-O mecanismo de exclusao de queries foi desativado. `EXCLUDED_QUERY_TEXTS` em `domain/excluded_queries.py` e um `frozenset` vazio, `is_excluded_query()` retorna sempre `False`, e `list_by_dataset()` nao aplica nenhum filtro de exclusao. O sistema usa todas as queries do dataset (ate 50 para trec-covid apos reindexacao).
 
 ## Observacoes
 
