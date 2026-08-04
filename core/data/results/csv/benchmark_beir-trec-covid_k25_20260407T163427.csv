@@ -1,0 +1,156 @@
+pipeline,k,query_count,error_count,mean_ndcg_at_k,mean_recall_at_k,mean_mrr_at_k,mean_precision_at_k,mean_encode_time_ms,mean_search_time_ms,mean_total_time_ms
+classical,25,50,0,0.4485,0.0251,0.6507,0.4304,19.9419,71.5766,91.5185
+quantum,25,50,0,0.4231,0.0231,0.6466,0.4040,29.8211,62.2550,92.0762
+statistical,25,50,0,0.4538,0.0257,0.6736,0.4328,22.3680,75.2214,97.5894
+
+pipeline,query_id,query_text,ndcg_at_k,recall_at_k,mrr_at_k,precision_at_k,encode_time_ms,search_time_ms,total_time_ms
+classical,1,"what is the origin of COVID-19",0.2051,0.0078,0.3333,0.2000,29.9570,76.3000,106.2570
+classical,2,"how does the coronavirus respond to changes in the weather",0.5266,0.0350,1.0000,0.4400,19.2680,82.0560,101.3230
+classical,3,"will SARS-CoV2 infected people develop immunity? Is cross protection possible?",0.3093,0.0080,1.0000,0.2000,15.2240,57.0140,72.2380
+classical,4,"what causes death from Covid-19?",0.1172,0.0076,0.0833,0.1600,13.3540,60.2330,73.5870
+classical,5,"what drugs have been active against SARS-CoV or SARS-CoV-2 in animal studies?",0.3831,0.0147,1.0000,0.3600,17.2990,65.9660,83.2650
+classical,6,"what types of rapid testing for Covid-19 have been developed?",0.3794,0.0115,0.1667,0.4400,9.6320,54.8780,64.5100
+classical,7,"are there serological tests that detect antibodies to coronavirus?",0.4067,0.0249,0.2500,0.4800,11.7300,51.2980,63.0290
+classical,8,"how has lack of testing availability led to underreporting of true incidence of Covid-19?",0.5133,0.0174,1.0000,0.4400,18.6160,66.9360,85.5530
+classical,9,"how has COVID-19 affected Canada",0.0000,0.0000,0.0000,0.0000,12.2910,51.5060,63.7970
+classical,10,"has social distancing had an impact on slowing the spread of COVID-19?",0.7682,0.0400,1.0000,0.7600,13.3070,64.6150,77.9230
+classical,11,"what are the guidelines for triaging patients infected with coronavirus?",0.1302,0.0072,0.2000,0.1200,13.5320,72.5710,86.1030
+classical,12,"what are best practices in hospitals and at home in maintaining quarantine?",0.2511,0.0097,0.5000,0.2400,22.4360,91.3820,113.8180
+classical,13,"what are the transmission routes of coronavirus?",0.1608,0.0058,0.1111,0.2000,22.2390,105.7770,128.0150
+classical,14,"what evidence is there related to COVID-19 super spreaders",0.1522,0.0157,0.2500,0.1600,14.6770,67.7900,82.4670
+classical,15,"how long can the coronavirus live outside the body",0.2060,0.0071,1.0000,0.1200,17.3320,87.6840,105.0160
+classical,16,"how long does coronavirus remain stable  on surfaces?",0.5924,0.0310,1.0000,0.4800,14.5160,84.7900,99.3060
+classical,17,"are there any clinical trials available for the coronavirus",0.4604,0.0210,0.1667,0.5600,28.1570,84.1210,112.2780
+classical,18,"what are the best masks for preventing infection by Covid-19?",0.6690,0.0255,1.0000,0.6400,27.1700,92.2190,119.3890
+classical,19,"what type of hand sanitizer is needed to destroy Covid-19?",0.4243,0.0721,1.0000,0.3200,14.3530,52.6480,67.0010
+classical,20,"are patients taking Angiotensin-converting enzyme inhibitors (ACE) at increased risk for COVID-19?",0.8771,0.0313,1.0000,0.8800,21.1290,74.4760,95.6050
+classical,21,"what are the mortality rates overall and in specific populations",0.4210,0.0190,0.3333,0.4800,11.6770,56.8030,68.4800
+classical,22,"are cardiac complications likely in patients with COVID-19?",0.4524,0.0201,1.0000,0.4400,15.0920,63.0030,78.0950
+classical,23,"what kinds of complications related to COVID-19 are associated with hypertension?",0.4404,0.0270,0.5000,0.4000,17.7290,66.5000,84.2290
+classical,24,"what kinds of complications related to COVID-19 are associated with diabetes",0.6069,0.0322,1.0000,0.5200,20.5030,51.6410,72.1440
+classical,25,"which biomarkers predict the severe clinical course of 2019-nCOV infection?",0.1005,0.0038,0.2500,0.0800,11.6590,62.0570,73.7160
+classical,26,"what are the initial symptoms of Covid-19?",0.2977,0.0103,0.5000,0.3200,20.6850,63.5940,84.2790
+classical,27,"what is known about those infected with Covid-19 but are asymptomatic?",0.2975,0.0106,0.2000,0.3600,12.7240,66.0390,78.7620
+classical,28,"what evidence is there for the value of hydroxychloroquine in treating Covid-19?",0.6838,0.0345,0.3333,0.7600,19.9940,98.2020,118.1970
+classical,29,"which SARS-CoV-2 proteins-human proteins interactions indicate potential for drug targets. Are there approved drugs that can be repurposed based on this information?",0.5558,0.0232,0.5000,0.5600,20.3310,52.8430,73.1740
+classical,30,"is remdesivir an effective treatment for COVID-19",0.7276,0.0459,1.0000,0.6800,15.6190,65.4370,81.0570
+classical,31,"How does the coronavirus differ from seasonal flu?",0.2419,0.0170,0.5000,0.2400,9.3090,53.6610,62.9700
+classical,32,"Does SARS-CoV-2 have any subtypes, and if so what are they?",0.2025,0.0324,0.0714,0.2800,16.4050,54.1780,70.5830
+classical,33,"What vaccine candidates are being tested for Covid-19?",0.3152,0.0320,0.2500,0.3600,55.1300,93.8300,148.9600
+classical,34,"What are the longer-term complications of those who recover from COVID-19?",0.0876,0.0116,0.3333,0.0800,16.7160,94.7260,111.4430
+classical,35,"What new public datasets are available related to COVID-19?",0.3174,0.0275,1.0000,0.2400,22.4590,75.4200,97.8790
+classical,36,"What is the protein structure of the SARS-CoV-2 spike?",0.7724,0.0311,1.0000,0.7600,14.9710,65.2650,80.2360
+classical,37,"What is the result of phylogenetic analysis of SARS-CoV-2 genome sequence?",0.4266,0.0267,0.3333,0.4800,18.3830,84.5530,102.9360
+classical,38,"What is the mechanism of inflammatory response and pathogenesis of COVID-19 cases?",0.5154,0.0087,1.0000,0.4400,79.6420,123.0150,202.6570
+classical,39,"What is the mechanism of cytokine storm syndrome on the COVID-19?",0.8893,0.0244,1.0000,0.8400,20.2530,61.9820,82.2350
+classical,40,"What are the observed mutations in the SARS-CoV-2 genome and how often do the mutations occur?",0.9724,0.0432,1.0000,0.9600,13.7620,66.8520,80.6130
+classical,41,"What are the impacts of COVID-19 among African-Americans that differ from the rest of the U.S. population?",0.7494,0.0547,1.0000,0.6800,15.0350,66.5620,81.5970
+classical,42,"Does Vitamin D impact COVID-19 prevention and treatment?",0.8215,0.0782,1.0000,0.7600,30.5340,64.1020,94.6350
+classical,43,"How has the COVID-19 pandemic impacted violence in society, including violent crimes?",0.1016,0.0119,0.2000,0.1200,29.6890,60.8860,90.5750
+classical,44,"How much impact do masks have on preventing the spread of the COVID-19?",0.8913,0.0455,1.0000,0.8800,13.2990,67.6010,80.9000
+classical,45,"How has the COVID-19 pandemic impacted mental health?",0.7677,0.0211,1.0000,0.6800,13.0900,75.0350,88.1250
+classical,46,"what evidence is there for dexamethasone as a treatment for COVID-19?",0.3028,0.0330,1.0000,0.2400,18.7760,84.5450,103.3210
+classical,47,"what are the health outcomes for children who contract COVID-19?",0.3944,0.0286,0.1667,0.4800,34.4130,85.7680,120.1810
+classical,48,"what are the benefits and risks of re-opening schools in the midst of the COVID-19 pandemic?",0.7430,0.0360,1.0000,0.6400,12.2230,47.2830,59.5060
+classical,49,"do individuals who recover from COVID-19 show sufficient immune response, including antibody levels and T-cell mediated immunity, to prevent re-infection?",0.5024,0.0364,1.0000,0.3600,13.9940,63.9150,77.9080
+classical,50,"what is known about an mRNA vaccine for the SARS-CoV-2 virus?",0.2938,0.0365,1.0000,0.2000,26.7810,99.2710,126.0520
+quantum,1,"what is the origin of COVID-19",0.2318,0.0078,0.5000,0.2000,15.2050,63.4050,78.6100
+quantum,2,"how does the coronavirus respond to changes in the weather",0.5014,0.0350,1.0000,0.4400,23.9340,74.7410,98.6750
+quantum,3,"will SARS-CoV2 infected people develop immunity? Is cross protection possible?",0.3938,0.0111,1.0000,0.2800,69.3190,85.4550,154.7740
+quantum,4,"what causes death from Covid-19?",0.0975,0.0057,0.1250,0.1200,42.6360,87.2890,129.9250
+quantum,5,"what drugs have been active against SARS-CoV or SARS-CoV-2 in animal studies?",0.3356,0.0147,0.5000,0.3600,80.5030,103.9620,184.4650
+quantum,6,"what types of rapid testing for Covid-19 have been developed?",0.4005,0.0115,0.2500,0.4400,19.3620,90.5560,109.9180
+quantum,7,"are there serological tests that detect antibodies to coronavirus?",0.3320,0.0208,0.2000,0.4000,29.9200,65.3350,95.2550
+quantum,8,"how has lack of testing availability led to underreporting of true incidence of Covid-19?",0.4849,0.0158,1.0000,0.4000,65.9630,70.4420,136.4040
+quantum,9,"how has COVID-19 affected Canada",0.0000,0.0000,0.0000,0.0000,32.3830,51.5750,83.9570
+quantum,10,"has social distancing had an impact on slowing the spread of COVID-19?",0.7800,0.0400,1.0000,0.7600,16.7690,48.5890,65.3590
+quantum,11,"what are the guidelines for triaging patients infected with coronavirus?",0.1236,0.0072,0.1667,0.1200,20.3380,55.8060,76.1440
+quantum,12,"what are best practices in hospitals and at home in maintaining quarantine?",0.1869,0.0065,0.3333,0.1600,16.3280,48.9540,65.2820
+quantum,13,"what are the transmission routes of coronavirus?",0.1714,0.0069,0.1000,0.2400,17.8110,51.0430,68.8550
+quantum,14,"what evidence is there related to COVID-19 super spreaders",0.1802,0.0118,1.0000,0.1200,21.1660,52.3500,73.5170
+quantum,15,"how long can the coronavirus live outside the body",0.2416,0.0118,1.0000,0.2000,20.6340,57.0090,77.6430
+quantum,16,"how long does coronavirus remain stable  on surfaces?",0.4954,0.0284,1.0000,0.4400,14.4100,51.7880,66.1980
+quantum,17,"are there any clinical trials available for the coronavirus",0.3326,0.0150,0.2500,0.4000,24.1310,53.1340,77.2650
+quantum,18,"what are the best masks for preventing infection by Covid-19?",0.7137,0.0271,1.0000,0.6800,18.0180,50.8110,68.8290
+quantum,19,"what type of hand sanitizer is needed to destroy Covid-19?",0.3050,0.0541,1.0000,0.2400,27.0620,57.4800,84.5430
+quantum,20,"are patients taking Angiotensin-converting enzyme inhibitors (ACE) at increased risk for COVID-19?",0.8754,0.0313,1.0000,0.8800,17.3870,49.7380,67.1240
+quantum,21,"what are the mortality rates overall and in specific populations",0.2866,0.0127,0.5000,0.3200,19.5720,49.8550,69.4280
+quantum,22,"are cardiac complications likely in patients with COVID-19?",0.4405,0.0183,0.5000,0.4000,14.5730,55.1840,69.7580
+quantum,23,"what kinds of complications related to COVID-19 are associated with hypertension?",0.5379,0.0350,0.5000,0.5200,16.2630,57.6280,73.8910
+quantum,24,"what kinds of complications related to COVID-19 are associated with diabetes",0.5826,0.0297,1.0000,0.4800,19.7460,59.1960,78.9420
+quantum,25,"which biomarkers predict the severe clinical course of 2019-nCOV infection?",0.0951,0.0057,0.0909,0.1200,16.1150,49.2610,65.3750
+quantum,26,"what are the initial symptoms of Covid-19?",0.1810,0.0064,0.3333,0.2000,23.0650,64.8110,87.8760
+quantum,27,"what is known about those infected with Covid-19 but are asymptomatic?",0.2735,0.0106,0.2000,0.3600,42.3900,66.4920,108.8830
+quantum,28,"what evidence is there for the value of hydroxychloroquine in treating Covid-19?",0.6560,0.0327,0.3333,0.7200,67.0440,66.1710,133.2150
+quantum,29,"which SARS-CoV-2 proteins-human proteins interactions indicate potential for drug targets. Are there approved drugs that can be repurposed based on this information?",0.5299,0.0199,1.0000,0.4800,85.1310,76.5410,161.6720
+quantum,30,"is remdesivir an effective treatment for COVID-19",0.7831,0.0514,1.0000,0.7600,66.1710,65.1960,131.3670
+quantum,31,"How does the coronavirus differ from seasonal flu?",0.2322,0.0170,0.5000,0.2400,54.2840,75.9840,130.2670
+quantum,32,"Does SARS-CoV-2 have any subtypes, and if so what are they?",0.1459,0.0231,0.0714,0.2000,32.8150,64.9860,97.8010
+quantum,33,"What vaccine candidates are being tested for Covid-19?",0.2533,0.0249,0.2500,0.2800,17.1100,47.7810,64.8910
+quantum,34,"What are the longer-term complications of those who recover from COVID-19?",0.0615,0.0058,0.3333,0.0400,16.5520,49.6960,66.2480
+quantum,35,"What new public datasets are available related to COVID-19?",0.2487,0.0229,1.0000,0.2000,16.3400,47.7620,64.1030
+quantum,36,"What is the protein structure of the SARS-CoV-2 spike?",0.7347,0.0295,1.0000,0.7200,19.2580,77.6860,96.9440
+quantum,37,"What is the result of phylogenetic analysis of SARS-CoV-2 genome sequence?",0.4039,0.0244,0.5000,0.4400,16.2870,47.8930,64.1810
+quantum,38,"What is the mechanism of inflammatory response and pathogenesis of COVID-19 cases?",0.5550,0.0103,1.0000,0.5200,14.4260,51.0280,65.4540
+quantum,39,"What is the mechanism of cytokine storm syndrome on the COVID-19?",0.8527,0.0233,1.0000,0.8000,17.4170,60.4750,77.8920
+quantum,40,"What are the observed mutations in the SARS-CoV-2 genome and how often do the mutations occur?",0.9456,0.0414,1.0000,0.9200,30.3800,68.1130,98.4930
+quantum,41,"What are the impacts of COVID-19 among African-Americans that differ from the rest of the U.S. population?",0.7050,0.0482,1.0000,0.6000,22.9530,66.2250,89.1790
+quantum,42,"Does Vitamin D impact COVID-19 prevention and treatment?",0.8440,0.0823,1.0000,0.8000,35.4290,56.9690,92.3980
+quantum,43,"How has the COVID-19 pandemic impacted violence in society, including violent crimes?",0.0972,0.0119,0.1250,0.1200,25.0330,54.3300,79.3640
+quantum,44,"How much impact do masks have on preventing the spread of the COVID-19?",0.8897,0.0455,1.0000,0.8800,15.6560,57.0170,72.6730
+quantum,45,"How has the COVID-19 pandemic impacted mental health?",0.7629,0.0211,1.0000,0.6800,55.8530,77.8630,133.7170
+quantum,46,"what evidence is there for dexamethasone as a treatment for COVID-19?",0.2770,0.0275,1.0000,0.2000,33.5720,85.5190,119.0920
+quantum,47,"what are the health outcomes for children who contract COVID-19?",0.1957,0.0143,0.1667,0.2400,27.8920,62.6470,90.5380
+quantum,48,"what are the benefits and risks of re-opening schools in the midst of the COVID-19 pandemic?",0.7102,0.0338,1.0000,0.6000,23.7950,58.5680,82.3640
+quantum,49,"do individuals who recover from COVID-19 show sufficient immune response, including antibody levels and T-cell mediated immunity, to prevent re-infection?",0.4379,0.0283,1.0000,0.2800,33.8690,60.2790,94.1480
+quantum,50,"what is known about an mRNA vaccine for the SARS-CoV-2 virus?",0.2524,0.0365,0.5000,0.2000,18.7830,62.1330,80.9160
+statistical,1,"what is the origin of COVID-19",0.2263,0.0078,0.5000,0.2000,21.3240,63.9920,85.3160
+statistical,2,"how does the coronavirus respond to changes in the weather",0.5824,0.0414,1.0000,0.5200,13.2580,69.8980,83.1550
+statistical,3,"will SARS-CoV2 infected people develop immunity? Is cross protection possible?",0.3081,0.0080,1.0000,0.2000,21.8670,82.1960,104.0630
+statistical,4,"what causes death from Covid-19?",0.1204,0.0076,0.0769,0.1600,20.9130,73.8640,94.7770
+statistical,5,"what drugs have been active against SARS-CoV or SARS-CoV-2 in animal studies?",0.3908,0.0147,1.0000,0.3600,18.4900,70.9200,89.4100
+statistical,6,"what types of rapid testing for Covid-19 have been developed?",0.4058,0.0125,0.2000,0.4800,32.5660,71.5950,104.1610
+statistical,7,"are there serological tests that detect antibodies to coronavirus?",0.4905,0.0249,1.0000,0.4800,14.7410,80.1020,94.8430
+statistical,8,"how has lack of testing availability led to underreporting of true incidence of Covid-19?",0.5111,0.0158,1.0000,0.4000,45.0050,87.8550,132.8590
+statistical,9,"how has COVID-19 affected Canada",0.0000,0.0000,0.0000,0.0000,20.1000,57.2640,77.3630
+statistical,10,"has social distancing had an impact on slowing the spread of COVID-19?",0.7604,0.0400,1.0000,0.7600,11.4890,61.5060,72.9950
+statistical,11,"what are the guidelines for triaging patients infected with coronavirus?",0.1356,0.0072,0.2500,0.1200,45.5400,90.5620,136.1020
+statistical,12,"what are best practices in hospitals and at home in maintaining quarantine?",0.2345,0.0097,0.3333,0.2400,18.7720,119.4290,138.2010
+statistical,13,"what are the transmission routes of coronavirus?",0.1370,0.0046,0.1111,0.1600,40.9510,86.0550,127.0060
+statistical,14,"what evidence is there related to COVID-19 super spreaders",0.1557,0.0157,0.2500,0.1600,14.1740,77.7160,91.8910
+statistical,15,"how long can the coronavirus live outside the body",0.2246,0.0095,1.0000,0.1600,18.5630,77.3750,95.9380
+statistical,16,"how long does coronavirus remain stable  on surfaces?",0.5845,0.0310,1.0000,0.4800,15.2250,71.2950,86.5200
+statistical,17,"are there any clinical trials available for the coronavirus",0.4284,0.0195,0.1667,0.5200,20.0650,66.4970,86.5620
+statistical,18,"what are the best masks for preventing infection by Covid-19?",0.6423,0.0239,1.0000,0.6000,12.2290,69.5690,81.7990
+statistical,19,"what type of hand sanitizer is needed to destroy Covid-19?",0.4852,0.0901,1.0000,0.4000,18.3170,64.1300,82.4460
+statistical,20,"are patients taking Angiotensin-converting enzyme inhibitors (ACE) at increased risk for COVID-19?",0.8763,0.0313,1.0000,0.8800,23.1270,71.7120,94.8390
+statistical,21,"what are the mortality rates overall and in specific populations",0.3709,0.0159,0.3333,0.4000,22.4850,70.8250,93.3110
+statistical,22,"are cardiac complications likely in patients with COVID-19?",0.4773,0.0201,1.0000,0.4400,23.5910,64.6670,88.2580
+statistical,23,"what kinds of complications related to COVID-19 are associated with hypertension?",0.4403,0.0270,0.5000,0.4000,16.7570,67.0620,83.8190
+statistical,24,"what kinds of complications related to COVID-19 are associated with diabetes",0.6381,0.0347,1.0000,0.5600,14.0570,64.0080,78.0640
+statistical,25,"which biomarkers predict the severe clinical course of 2019-nCOV infection?",0.1391,0.0038,0.5000,0.0800,12.4140,66.2310,78.6450
+statistical,26,"what are the initial symptoms of Covid-19?",0.3627,0.0129,0.5000,0.4000,11.9100,58.2470,70.1570
+statistical,27,"what is known about those infected with Covid-19 but are asymptomatic?",0.2080,0.0071,0.1667,0.2400,11.4270,57.5900,69.0160
+statistical,28,"what evidence is there for the value of hydroxychloroquine in treating Covid-19?",0.6547,0.0327,0.3333,0.7200,21.5670,58.1070,79.6740
+statistical,29,"which SARS-CoV-2 proteins-human proteins interactions indicate potential for drug targets. Are there approved drugs that can be repurposed based on this information?",0.5293,0.0215,0.5000,0.5200,13.2320,62.7230,75.9550
+statistical,30,"is remdesivir an effective treatment for COVID-19",0.7307,0.0459,1.0000,0.6800,16.7320,73.3700,90.1020
+statistical,31,"How does the coronavirus differ from seasonal flu?",0.2696,0.0198,0.5000,0.2800,36.3110,119.1260,155.4370
+statistical,32,"Does SARS-CoV-2 have any subtypes, and if so what are they?",0.1841,0.0278,0.1250,0.2400,25.1420,82.9570,108.0990
+statistical,33,"What vaccine candidates are being tested for Covid-19?",0.3090,0.0320,0.2500,0.3600,13.6850,85.5130,99.1980
+statistical,34,"What are the longer-term complications of those who recover from COVID-19?",0.0876,0.0116,0.3333,0.0800,25.0030,76.9070,101.9100
+statistical,35,"What new public datasets are available related to COVID-19?",0.3158,0.0275,1.0000,0.2400,16.1590,129.5490,145.7090
+statistical,36,"What is the protein structure of the SARS-CoV-2 spike?",0.7376,0.0295,1.0000,0.7200,35.8520,95.0850,130.9370
+statistical,37,"What is the result of phylogenetic analysis of SARS-CoV-2 genome sequence?",0.4143,0.0267,0.2500,0.4800,40.5840,76.1680,116.7520
+statistical,38,"What is the mechanism of inflammatory response and pathogenesis of COVID-19 cases?",0.4814,0.0079,1.0000,0.4000,20.2980,59.4940,79.7920
+statistical,39,"What is the mechanism of cytokine storm syndrome on the COVID-19?",0.9408,0.0267,1.0000,0.9200,16.5280,69.4700,85.9980
+statistical,40,"What are the observed mutations in the SARS-CoV-2 genome and how often do the mutations occur?",0.9715,0.0432,1.0000,0.9600,55.9490,108.7210,164.6700
+statistical,41,"What are the impacts of COVID-19 among African-Americans that differ from the rest of the U.S. population?",0.7721,0.0579,1.0000,0.7200,15.8190,79.6120,95.4320
+statistical,42,"Does Vitamin D impact COVID-19 prevention and treatment?",0.8241,0.0782,1.0000,0.7600,16.3720,66.6040,82.9760
+statistical,43,"How has the COVID-19 pandemic impacted violence in society, including violent crimes?",0.2281,0.0277,0.3333,0.2800,28.7360,74.4930,103.2290
+statistical,44,"How much impact do masks have on preventing the spread of the COVID-19?",0.8940,0.0455,1.0000,0.8800,25.3770,65.9480,91.3250
+statistical,45,"How has the COVID-19 pandemic impacted mental health?",0.7740,0.0211,1.0000,0.6800,18.1470,76.4840,94.6310
+statistical,46,"what evidence is there for dexamethasone as a treatment for COVID-19?",0.2514,0.0220,1.0000,0.1600,16.8080,66.6640,83.4720
+statistical,47,"what are the health outcomes for children who contract COVID-19?",0.4557,0.0333,0.1667,0.5600,16.2720,72.3410,88.6120
+statistical,48,"what are the benefits and risks of re-opening schools in the midst of the COVID-19 pandemic?",0.7428,0.0360,1.0000,0.6400,23.2660,60.1900,83.4570
+statistical,49,"do individuals who recover from COVID-19 show sufficient immune response, including antibody levels and T-cell mediated immunity, to prevent re-infection?",0.4932,0.0364,1.0000,0.3600,17.9320,76.1760,94.1080
+statistical,50,"what is known about an mRNA vaccine for the SARS-CoV-2 virus?",0.2946,0.0365,1.0000,0.2000,43.2740,63.2060,106.4800
