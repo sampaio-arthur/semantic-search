@@ -1,0 +1,7 @@
+python=3.14.0
+python_implementation=CPython
+numpy=2.4.4
+scipy=1.17.1
+bootstrap_resamples=10000
+bootstrap_seed=42
+alpha=0.05

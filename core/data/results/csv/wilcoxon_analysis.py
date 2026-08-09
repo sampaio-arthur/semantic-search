@@ -1,8 +1,3 @@
-"""
-Wilcoxon Signed-Rank Test — Análise de Significância Estatística
-TCC: A Controlled Comparative Study of Vector Transformations in Semantic Search
-"""
-
 import csv
 import sys
 import numpy as np

@@ -1,0 +1,190 @@
+Diretorio: \\wsl.localhost\Ubuntu\home\sampaio\projects\tcc\core\data\results\csv
+Arquivos validados: 4  |  consultas por pipeline: 50
+
+========================================================================================
+SAIDA 1 - RECONCILIACAO DE FONTES (bloco agregado vs. recalculo por consulta)
+========================================================================================
+   k  pipeline     metric       aggregated   recomputed     abs_diff  flag
+----------------------------------------------------------------------------------------
+  10  classical    ndcg           0.483800     0.483794     0.000006
+  10  classical    recall         0.011600     0.011608     0.000008
+  10  classical    mrr            0.647600     0.647554     0.000046
+  10  classical    precision      0.476000     0.476000     0.000000
+  10  quantum      ndcg           0.458700     0.458676     0.000024
+  10  quantum      recall         0.010900     0.010900     0.000000
+  10  quantum      mrr            0.643300     0.643332     0.000032
+  10  quantum      precision      0.444000     0.444000     0.000000
+  10  statistical  ndcg           0.494600     0.494604     0.000004
+  10  statistical  recall         0.011700     0.011734     0.000034
+  10  statistical  mrr            0.672100     0.672054     0.000046
+  10  statistical  precision      0.484000     0.484000     0.000000
+  25  classical    ndcg           0.448500     0.448492     0.000008
+  25  classical    recall         0.025100     0.025128     0.000028
+  25  classical    mrr            0.650700     0.650648     0.000052
+  25  classical    precision      0.430400     0.430400     0.000000
+  25  quantum      ndcg           0.423100     0.423100     0.000000
+  25  quantum      recall         0.023100     0.023138     0.000038
+  25  quantum      mrr            0.646600     0.646578     0.000022
+  25  quantum      precision      0.404000     0.404000     0.000000
+  25  statistical  ndcg           0.453800     0.453854     0.000054
+  25  statistical  recall         0.025700     0.025682     0.000018
+  25  statistical  mrr            0.673600     0.673592     0.000008
+  25  statistical  precision      0.432800     0.432800     0.000000
+  50  classical    ndcg           0.412800     0.412778     0.000022
+  50  classical    recall         0.044500     0.044484     0.000016
+  50  classical    mrr            0.650700     0.650648     0.000052
+  50  classical    precision      0.390800     0.390800     0.000000
+  50  quantum      ndcg           0.394200     0.394178     0.000022
+  50  quantum      recall         0.041900     0.041880     0.000020
+  50  quantum      mrr            0.646600     0.646578     0.000022
+  50  quantum      precision      0.374000     0.374000     0.000000
+  50  statistical  ndcg           0.416400     0.416388     0.000012
+  50  statistical  recall         0.044500     0.044470     0.000030
+  50  statistical  mrr            0.673600     0.673592     0.000008
+  50  statistical  precision      0.392000     0.392000     0.000000
+ 100  classical    ndcg           0.369500     0.369528     0.000028
+ 100  classical    recall         0.076200     0.076200     0.000000
+ 100  classical    mrr            0.650700     0.650648     0.000052
+ 100  classical    precision      0.344600     0.344600     0.000000
+ 100  quantum      ndcg           0.349600     0.349654     0.000054
+ 100  quantum      recall         0.071600     0.071600     0.000000
+ 100  quantum      mrr            0.646800     0.646834     0.000034
+ 100  quantum      precision      0.325800     0.325800     0.000000
+ 100  statistical  ndcg           0.371200     0.371166     0.000034
+ 100  statistical  recall         0.076200     0.076180     0.000020
+ 100  statistical  mrr            0.673800     0.673822     0.000022
+ 100  statistical  precision      0.344400     0.344400     0.000000
+----------------------------------------------------------------------------------------
+Total de comparacoes: 48  |  Divergencias > 0.0001: 0
+
+========================================================================================
+SAIDA 2 - ESTATISTICAS DESCRITIVAS (Tabela I, desvio amostral ddof=1)
+========================================================================================
+   k  pipeline     metric                   mean          std    n
+----------------------------------------------------------------------------------------
+  10  classical    ndcg                   0.4838       0.2991   50
+  10  classical    recall                 0.0116       0.0091   50
+  10  classical    mrr                    0.6476       0.3861   50
+  10  classical    precision              0.4760       0.2847   50
+  10  classical    encode_time_ms        20.1248       8.4136   50
+  10  classical    search_time_ms        68.9316      13.4815   50
+  10  classical    total_time_ms         89.0564      20.0554   50
+  10  quantum      ndcg                   0.4587       0.3062   50
+  10  quantum      recall                 0.0109       0.0093   50
+  10  quantum      mrr                    0.6433       0.3811   50
+  10  quantum      precision              0.4440       0.2929   50
+  10  quantum      encode_time_ms        29.3952      10.9420   50
+  10  quantum      search_time_ms        60.2270      11.6519   50
+  10  quantum      total_time_ms         89.6223      20.4860   50
+  10  statistical  ndcg                   0.4946       0.2874   50
+  10  statistical  recall                 0.0117       0.0089   50
+  10  statistical  mrr                    0.6721       0.3745   50
+  10  statistical  precision              0.4840       0.2751   50
+  10  statistical  encode_time_ms        19.5710       5.7892   50
+  10  statistical  search_time_ms        73.0919      16.3960   50
+  10  statistical  total_time_ms         92.6628      19.9533   50
+----------------------------------------------------------------------------------------
+  25  classical    ndcg                   0.4485       0.2518   50
+  25  classical    recall                 0.0251       0.0164   50
+  25  classical    mrr                    0.6506       0.3811   50
+  25  classical    precision              0.4304       0.2436   50
+  25  classical    encode_time_ms        19.9419      11.6430   50
+  25  classical    search_time_ms        71.5766      16.4582   50
+  25  classical    total_time_ms         91.5185      25.4929   50
+  25  quantum      ndcg                   0.4231       0.2592   50
+  25  quantum      recall                 0.0231       0.0157   50
+  25  quantum      mrr                    0.6466       0.3758   50
+  25  quantum      precision              0.4040       0.2463   50
+  25  quantum      encode_time_ms        29.8211      18.6515   50
+  25  quantum      search_time_ms        62.2550      12.9256   50
+  25  quantum      total_time_ms         92.0762      28.8011   50
+  25  statistical  ndcg                   0.4539       0.2504   50
+  25  statistical  recall                 0.0257       0.0177   50
+  25  statistical  mrr                    0.6736       0.3719   50
+  25  statistical  precision              0.4328       0.2441   50
+  25  statistical  encode_time_ms        22.3680      10.3738   50
+  25  statistical  search_time_ms        75.2214      15.9354   50
+  25  statistical  total_time_ms         97.5894      22.1726   50
+----------------------------------------------------------------------------------------
+  50  classical    ndcg                   0.4128       0.2350   50
+  50  classical    recall                 0.0445       0.0274   50
+  50  classical    mrr                    0.6506       0.3811   50
+  50  classical    precision              0.3908       0.2295   50
+  50  classical    encode_time_ms        21.8938       8.1057   50
+  50  classical    search_time_ms        77.3016      17.8521   50
+  50  classical    total_time_ms         99.1953      21.3265   50
+  50  quantum      ndcg                   0.3942       0.2324   50
+  50  quantum      recall                 0.0419       0.0257   50
+  50  quantum      mrr                    0.6466       0.3758   50
+  50  quantum      precision              0.3740       0.2230   50
+  50  quantum      encode_time_ms        32.3581      11.4733   50
+  50  quantum      search_time_ms        62.3873      10.0244   50
+  50  quantum      total_time_ms         94.7454      19.1178   50
+  50  statistical  ndcg                   0.4164       0.2322   50
+  50  statistical  recall                 0.0445       0.0267   50
+  50  statistical  mrr                    0.6736       0.3719   50
+  50  statistical  precision              0.3920       0.2284   50
+  50  statistical  encode_time_ms        18.8636       6.2280   50
+  50  statistical  search_time_ms        70.8897      12.1259   50
+  50  statistical  total_time_ms         89.7534      15.9489   50
+----------------------------------------------------------------------------------------
+ 100  classical    ndcg                   0.3695       0.2147   50
+ 100  classical    recall                 0.0762       0.0443   50
+ 100  classical    mrr                    0.6506       0.3811   50
+ 100  classical    precision              0.3446       0.2089   50
+ 100  classical    encode_time_ms        29.2974      11.9195   50
+ 100  classical    search_time_ms        86.2016      21.5582   50
+ 100  classical    total_time_ms        115.4990      25.1969   50
+ 100  quantum      ndcg                   0.3497       0.2115   50
+ 100  quantum      recall                 0.0716       0.0407   50
+ 100  quantum      mrr                    0.6468       0.3753   50
+ 100  quantum      precision              0.3258       0.2044   50
+ 100  quantum      encode_time_ms        41.9752      19.4824   50
+ 100  quantum      search_time_ms        77.3698      16.1327   50
+ 100  quantum      total_time_ms        119.3449      31.1927   50
+ 100  statistical  ndcg                   0.3712       0.2140   50
+ 100  statistical  recall                 0.0762       0.0435   50
+ 100  statistical  mrr                    0.6738       0.3715   50
+ 100  statistical  precision              0.3444       0.2088   50
+ 100  statistical  encode_time_ms        26.2486      12.9740   50
+ 100  statistical  search_time_ms        78.7916      13.4041   50
+ 100  statistical  total_time_ms        105.0403      21.3812   50
+----------------------------------------------------------------------------------------
+
+======================================================================================================================
+SAIDA 3 - TESTES PAREADOS (nDCG@k, Wilcoxon signed-rank bilateral)
+======================================================================================================================
+   k  pair                        mean_diff        W     p_raw    p_holm   sig    r_rb      W/L/T       CI95 (bootstrap) CI_has_0
+----------------------------------------------------------------------------------------------------------------------
+  10  statistical-classical         +0.0108    208.0    0.1951    0.1951   nao +0.2585   19/14/17     [-0.0019, +0.0240]   sim
+  10  classical-quantum             +0.0251    202.0    0.0087    0.0174   sim +0.4821    30/9/11     [+0.0080, +0.0430]   nao
+  10  statistical-quantum           +0.0359    197.5    0.0025    0.0076   sim +0.5412    29/12/9     [+0.0147, +0.0583]   nao
+----------------------------------------------------------------------------------------------------------------------
+  25  statistical-classical         +0.0054    526.0    0.5248    0.5248   nao +0.1054    24/24/2     [-0.0046, +0.0158]   sim
+  25  classical-quantum             +0.0254    298.0    0.0018    0.0053   sim +0.5135    37/12/1     [+0.0109, +0.0413]   nao
+  25  statistical-quantum           +0.0308    317.0    0.0033    0.0066   sim +0.4824    34/15/1     [+0.0122, +0.0499]   nao
+----------------------------------------------------------------------------------------------------------------------
+  50  statistical-classical         +0.0036    468.5    0.2203    0.2203   nao +0.2032    32/16/2     [-0.0025, +0.0098]   sim
+  50  classical-quantum             +0.0186    313.0    0.0029    0.0058   sim +0.4890    34/15/1     [+0.0066, +0.0303]   nao
+  50  statistical-quantum           +0.0222    276.0    0.0008    0.0024   sim +0.5494    36/13/1     [+0.0095, +0.0347]   nao
+----------------------------------------------------------------------------------------------------------------------
+ 100  statistical-classical         +0.0016    559.5    0.4515    0.4515   nao +0.1224    28/22/0     [-0.0021, +0.0054]   sim
+ 100  classical-quantum             +0.0199    297.0    0.0008    0.0015   sim +0.5341    34/16/0     [+0.0096, +0.0313]   nao
+ 100  statistical-quantum           +0.0215    259.0    0.0003    0.0008   sim +0.5937    36/14/0     [+0.0111, +0.0327]   nao
+----------------------------------------------------------------------------------------------------------------------
+Familia Holm-Bonferroni: os 3 pares dentro de cada k  |  alfa = 0.05
+Metodo Wilcoxon usado por comparacao:
+  k= 10  statistical-classical      -> normal approximation
+  k= 10  classical-quantum          -> normal approximation
+  k= 10  statistical-quantum        -> normal approximation
+  k= 25  statistical-classical      -> normal approximation
+  k= 25  classical-quantum          -> normal approximation
+  k= 25  statistical-quantum        -> normal approximation
+  k= 50  statistical-classical      -> normal approximation
+  k= 50  classical-quantum          -> normal approximation
+  k= 50  statistical-quantum        -> normal approximation
+  k=100  statistical-classical      -> normal approximation
+  k=100  classical-quantum          -> exact
+  k=100  statistical-quantum        -> normal approximation
+
+Arquivos gerados: reconciliation.csv, descriptives.csv, paired_tests.csv, environment.txt
