@@ -17,14 +17,17 @@ class StatisticalPipelineEncoder:
     text
     → tokenizer BERT
     → SentenceTransformer embedding (384-dim)
-    → PCA dimensionality reduction (→ pca_intermediate_dim = vector_dim = 64)
-    → TruncatedSVD (→ vector_dim = 64)
+    → PCA dimensionality reduction (384 → pca_intermediate_dim = 128)
+    → TruncatedSVD (128 → vector_dim = 64)
     → L2 normalization
     → stored in pgvector (statistical_vector column)
 
-    PCA centers the embedding space (384 → 64); TruncatedSVD further factorizes
-    the centered embedding matrix into a lower-dimensional representation without
-    re-centering. Both stages output the same vector_dim (64), so svd_input_dim=64.
+    PCA centers the embedding space and reduces it to pca_intermediate_dim;
+    TruncatedSVD then factorizes that projection down to vector_dim without
+    re-centering. pca_intermediate_dim must be strictly greater than vector_dim.
+    If they are equal, the SVD stage operates on a full-rank projection and acts
+    as an orthogonal transformation, which leaves cosine similarity unchanged and
+    makes this pipeline numerically identical to the classical baseline.
     This two-stage linear transformation is the distinguishing characteristic of
     this pipeline relative to the classical (PCA only) baseline.
 
