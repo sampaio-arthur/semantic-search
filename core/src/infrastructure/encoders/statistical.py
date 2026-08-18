@@ -38,7 +38,7 @@ class StatisticalPipelineEncoder:
         self,
         base: SharedSbertBase,
         dim: int = 64,
-        pca_intermediate_dim: int = 64,
+        pca_intermediate_dim: int = 128,
         seed: int = 42,
     ) -> None:
         self.base = base
