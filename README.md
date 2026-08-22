@@ -169,6 +169,76 @@ docker compose exec core pytest
 docker compose exec core pytest tests/test_api_flow.py -v
 ```
 
+## Reproduzindo os resultados do artigo
+
+Este repositorio e o artefato de reprodutibilidade do artigo "A Controlled
+Comparative Study of Vector Transformations in Semantic Search". Todos os
+artefatos citados no artigo estao em `core/data/results/csv/`.
+
+A execucao reportada usa as 50 consultas do TREC-COVID com qrels disponiveis,
+integralmente e sem exclusao. Os quatro CSVs por consulta registram
+`query_count=50` e `error_count=0` nos tres pipelines.
+
+### Arquivos versionados
+
+| Arquivo                                | Conteudo                                                   |
+| -------------------------------------- | ---------------------------------------------------------- |
+| `benchmark_beir-trec-covid_k10_*.csv`  | metricas por consulta no corte 10                          |
+| `benchmark_beir-trec-covid_k25_*.csv`  | metricas por consulta no corte 25                          |
+| `benchmark_beir-trec-covid_k50_*.csv`  | metricas por consulta no corte 50                          |
+| `benchmark_beir-trec-covid_k100_*.csv` | metricas por consulta no corte 100                         |
+| `descriptives.csv`                     | medias e desvios por corte, pipeline e metrica             |
+| `paired_tests.csv`                     | Wilcoxon pareado, correcao de Holm, tamanho de efeito e IC |
+| `reconciliation.csv`                   | conferencia entre agregados do run e valores recalculados  |
+| `environment.txt`                      | versoes e parametros usados na analise estatistica         |
+
+Cada CSV de benchmark tem dois blocos separados por linha em branco: o agregado
+por pipeline e o detalhe por consulta.
+
+### Nivel 1: refazer a analise estatistica
+
+Reproduz as Tabelas II, III e IV do artigo a partir dos CSVs por consulta. Nao
+exige subir os servicos nem indexar o dataset. Precisa apenas de `numpy` e
+`scipy`.
+
+```bash
+cd core/data/results/csv
+python statistical_analysis.py
+```
+
+O script revalida os arquivos de entrada, imprime a reconciliacao e reescreve
+`reconciliation.csv`, `descriptives.csv`, `paired_tests.csv` e `environment.txt`.
+O bootstrap usa 10000 reamostragens com semente 42, entao os intervalos saem
+identicos a cada execucao.
+
+O `wilcoxon_analysis.py`, no mesmo diretorio, roda o teste pareado de forma
+isolada.
+
+### Nivel 2: refazer o experimento completo
+
+1. Coloque o TREC-COVID em `core/data/beir/trec-covid/` conforme a secao Dataset
+2. Suba os servicos com `make setup`
+3. Indexe o dataset, o que ajusta e persiste os encoders dos tres pipelines
+4. Execute a avaliacao comparativa para cada valor de top_k em 10, 25, 50 e 100
+5. Exporte os resultados por consulta, que substituem os CSVs de benchmark
+6. Rode o Nivel 1 sobre os novos arquivos
+
+A primeira indexacao e demorada, porque faz o fit dos tres encoders sobre o
+corpus inteiro antes de transformar e persistir os vetores.
+
+### Determinismo
+
+A semente 42 e aplicada a PCA, a TruncatedSVD e aos pesos do circuito quantico.
+A revisao do modelo base esta fixada por hash em
+`core/src/infrastructure/encoders/base.py`. Os encoders ajustados sao
+persistidos em disco, o que evita reajuste entre execucoes.
+
+### Licenca
+
+Codigo e dados derivados sob licenca MIT, conforme o arquivo `LICENSE`. O
+TREC-COVID e o corpus CORD-19 seguem as licencas dos seus mantenedores
+originais e nao sao redistribuidos aqui.
+
 ## Documentacao adicional
 
 - `DOCUMENTACAO.md` (visao tecnica aderente ao codigo)
