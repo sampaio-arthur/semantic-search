@@ -229,9 +229,10 @@ corpus inteiro antes de transformar e persistir os vetores.
 ### Determinismo
 
 A semente 42 e aplicada a PCA, a TruncatedSVD e aos pesos do circuito quantico.
-A revisao do modelo base esta fixada por hash em
-`core/src/infrastructure/encoders/base.py`. Os encoders ajustados sao
-persistidos em disco, o que evita reajuste entre execucoes.
+Os encoders ajustados sao persistidos em disco, o que evita reajuste entre
+execucoes. O modelo base e carregado pelo nome, sem revisao fixada, entao uma
+atualizacao futura do modelo no Hugging Face pode alterar os embeddings de
+partida.
 
 ### Licenca
 
