@@ -203,3 +203,113 @@ Arquivo: `core/src/application/ir_use_cases.py`
 - Reduz numero de commits e atualiza progresso do job de indexacao por lote
 - Validacao explícita de dimensao antes do upsert: `len(vector) != VECTOR_DIM` lanca `ValueError`
 - Amostra de vetor emitida no primeiro documento e a cada 100 documentos via `[VECTOR SAMPLE]`
+
+## Teste de equivalencia (TOST)
+
+Arquivo: `core/data/results/csv/equivalence_analysis.py`
+
+### Pergunta
+
+O teste de Wilcoxon bilateral (`statistical_analysis.py`, `paired_tests.csv`) nao
+rejeitou a igualdade entre os pipelines `statistical` e `classical` no nDCG. Nao
+rejeitar a hipotese nula e **ausencia de evidencia de diferenca**, e nao evidencia
+de equivalencia: um teste de superioridade sem poder suficiente produz o mesmo
+resultado que dois pipelines de fato equivalentes. Para afirmar equivalencia e
+preciso um teste que a tenha como hipotese alternativa. Usa-se aqui o TOST
+(*two one-sided tests*), aplicado ao par `statistical - classical` nas 4 metricas
+(nDCG, Recall, MRR, Precision) e nos 4 cortes (k = 10, 25, 50, 100), totalizando
+16 comparacoes sobre as mesmas 50 consultas pareadas por `query_id`.
+
+### Margem de equivalencia
+
+A margem e relativa, fixada em 5% da media do pipeline `classical` para aquela
+metrica e corte:
+
+```
+delta = 0.05 x media(classical, metrica, k)
+```
+
+Justificativa: a regra de Sparck Jones (1974), reportada por Sanderson (2010,
+p. 313), segundo a qual diferencas abaixo de 5% nao sao perceptiveis em avaliacao
+de recuperacao de informacao. A margem e definida por essa regra **antes** de
+olhar os resultados e nao e ajustada aos dados.
+
+### Teste primario: TOST pareado com distribuicao t
+
+Para cada (metrica, corte), com `d_i = statistical_i - classical_i`, `n = 50`,
+`d_barra = media(d)`, `se = desvio(d, ddof=1) / raiz(n)` e `df = n - 1`:
+
+```
+p_lower = P(T > (d_barra + delta) / se)
+p_upper = P(T < (d_barra - delta) / se)
+p_tost  = max(p_lower, p_upper)
+```
+
+Conclui-se equivalencia quando `p_tost` corrigido por Holm fica abaixo de
+`alfa = 0.05`. Registra-se tambem o intervalo de confianca t de 90%
+(`d_barra +/- t_{0.95, df} x se`), cuja relacao com o TOST e direta: o teste
+aceita equivalencia exatamente quando esse intervalo esta contido em
+`(-delta, +delta)`.
+
+**Por que t e nao Wilcoxon.** A margem de 5% esta definida sobre a **media** da
+metrica. O teste de Wilcoxon testa a pseudo-mediana de Hodges-Lehmann, que e um
+parametro diferente. Em metricas com muitas diferencas exatamente iguais a zero —
+o caso do MRR, onde a maioria das consultas produz o mesmo primeiro acerto nos
+dois pipelines — o Wilcoxon concentra-se no nucleo de empates e aceita
+equivalencia mesmo quando a media esta fora da margem. Isso tornaria a conclusao
+inconsistente com a margem declarada. Por isso o teste t e o primario; o TOST
+com Wilcoxon e reportado apenas como registro suplementar e nao decide nada.
+
+### Confirmacao por bootstrap de 90%
+
+Para cada (metrica, corte) reamostram-se as 50 diferencas pareadas
+(`BOOTSTRAP_RESAMPLES = 10000`, `BOOTSTRAP_SEED = 42`, gerador novo por
+comparacao) e calcula-se o intervalo percentil de 90% da media. A coluna
+`ci90_inside` indica se esse intervalo esta inteiramente dentro de
+`(-delta, +delta)`, e `agree` indica se essa confirmacao concorda com a decisao
+do teste t. Sao dois criterios com pressupostos distintos (o t assume
+normalidade aproximada da media; o bootstrap nao) sobre o mesmo dado.
+
+### Familia de Holm-Bonferroni
+
+A correcao de Holm e aplicada **dentro de cada metrica, sobre os 4 cortes**
+(familias de tamanho 4). Cortes diferentes da mesma metrica sao leituras
+altamente correlacionadas do mesmo experimento, e a decisao de interesse e por
+metrica; metricas distintas respondem a perguntas distintas e nao sao agrupadas
+na mesma familia. A mesma correcao e aplicada, separadamente, ao TOST com
+Wilcoxon e a cada configuracao da analise de sensibilidade.
+
+### Sensibilidade a margem
+
+Como qualquer conclusao de equivalencia depende da margem escolhida, o mesmo TOST
+t e recalculado para margens absolutas (0.01, 0.02, 0.03, 0.05) e relativas
+(2.5%, 5%, 10% da media do `classical`). Reporta-se ainda a **margem minima de
+equivalencia** — a menor margem que o dado sustenta — como
+`max(|limite inferior|, |limite superior|)` do IC de 90%, nas versoes t e
+bootstrap, em valor absoluto e relativo a media do `classical`.
+
+### Execucao
+
+```
+cd core/data/results/csv
+python equivalence_analysis.py
+```
+
+O script reutiliza o carregador e as constantes de `statistical_analysis.py`
+(`load_all`, `METRICS`, `K_VALUES`, `BOOTSTRAP_RESAMPLES`, `BOOTSTRAP_SEED`,
+`ALPHA`, `holm_bonferroni`) e nao modifica nenhum arquivo pre-existente.
+Dependencias: numpy e scipy.
+
+### Arquivos gerados
+
+Todos em `core/data/results/csv/`:
+
+- `equivalence_tests.csv` — 16 linhas (4 metricas x 4 cortes) com medias, margem,
+  p-valores do TOST t (bruto e Holm), decisao de equivalencia, IC t e bootstrap de
+  90%, concordancia entre os dois criterios, TOST com Wilcoxon e margens minimas.
+- `equivalence_sensitivity.csv` — 112 linhas (16 comparacoes x 7 margens
+  alternativas) com `delta_type`, `delta_param`, `delta`, `p_tost`, `p_tost_holm`
+  e `equivalent`.
+- `equivalence_output.txt` — saida de console completa da execucao, incluindo as
+  versoes de Python, numpy e scipy e os parametros `BOOTSTRAP_RESAMPLES`,
+  `BOOTSTRAP_SEED` e `ALPHA`.
