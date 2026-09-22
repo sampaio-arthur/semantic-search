@@ -1,0 +1,182 @@
+======================================================================================================================
+TESTES PAREADOS NAS QUATRO METRICAS (Wilcoxon signed-rank bilateral)
+======================================================================================================================
+python=3.14.7
+python_implementation=CPython
+numpy=2.4.4
+scipy=1.17.1
+bootstrap_resamples=10000
+bootstrap_seed=42
+alpha=0.05
+
+Diretorio: C:\Users\arthu\OneDrive\Desktop\tcc\semantic-search\core\data\results\csv
+Consultas pareadas por comparacao: 50
+Metricas: nDCG, Recall, MRR, Precision  |  cortes: k = 10, 25, 50, 100
+Holm-Bonferroni: familia = os 3 pares dentro de cada (metrica, corte).
+IC de 95%: bootstrap pareado das diferencas, gerador novo por (metrica, corte).
+Procedimento identico ao de statistical_analysis.py; as linhas de nDCG
+reproduzem o paired_tests.csv.
+
+======================================================================================================================
+nDCG - testes pareados por corte
+======================================================================================================================
+   k  pair                        mean_diff        W     p_raw    p_holm   sig    r_rb      W/L/T       CI95 (bootstrap) CI_has_0
+----------------------------------------------------------------------------------------------------------------------
+  10  statistical-classical         +0.0108    208.0    0.1951    0.1951   nao +0.2585   19/14/17     [-0.0019, +0.0240]   sim
+  10  classical-quantum             +0.0251    202.0    0.0087    0.0174   sim +0.4821    30/9/11     [+0.0080, +0.0430]   nao
+  10  statistical-quantum           +0.0359    197.5    0.0025    0.0076   sim +0.5412    29/12/9     [+0.0147, +0.0583]   nao
+----------------------------------------------------------------------------------------------------------------------
+  25  statistical-classical         +0.0054    526.0    0.5248    0.5248   nao +0.1054    24/24/2     [-0.0046, +0.0158]   sim
+  25  classical-quantum             +0.0254    298.0    0.0018    0.0053   sim +0.5135    37/12/1     [+0.0109, +0.0413]   nao
+  25  statistical-quantum           +0.0308    317.0    0.0033    0.0066   sim +0.4824    34/15/1     [+0.0122, +0.0499]   nao
+----------------------------------------------------------------------------------------------------------------------
+  50  statistical-classical         +0.0036    468.5    0.2203    0.2203   nao +0.2032    32/16/2     [-0.0025, +0.0098]   sim
+  50  classical-quantum             +0.0186    313.0    0.0029    0.0058   sim +0.4890    34/15/1     [+0.0066, +0.0303]   nao
+  50  statistical-quantum           +0.0222    276.0    0.0008    0.0024   sim +0.5494    36/13/1     [+0.0095, +0.0347]   nao
+----------------------------------------------------------------------------------------------------------------------
+ 100  statistical-classical         +0.0016    559.5    0.4515    0.4515   nao +0.1224    28/22/0     [-0.0021, +0.0054]   sim
+ 100  classical-quantum             +0.0199    297.0    0.0008    0.0015   sim +0.5341    34/16/0     [+0.0096, +0.0313]   nao
+ 100  statistical-quantum           +0.0215    259.0    0.0003    0.0008   sim +0.5937    36/14/0     [+0.0111, +0.0327]   nao
+----------------------------------------------------------------------------------------------------------------------
+Metodo Wilcoxon usado por comparacao:
+  k= 10  statistical-classical      -> normal approximation
+  k= 10  classical-quantum          -> normal approximation
+  k= 10  statistical-quantum        -> normal approximation
+  k= 25  statistical-classical      -> normal approximation
+  k= 25  classical-quantum          -> normal approximation
+  k= 25  statistical-quantum        -> normal approximation
+  k= 50  statistical-classical      -> normal approximation
+  k= 50  classical-quantum          -> normal approximation
+  k= 50  statistical-quantum        -> normal approximation
+  k=100  statistical-classical      -> normal approximation
+  k=100  classical-quantum          -> exact
+  k=100  statistical-quantum        -> normal approximation
+
+======================================================================================================================
+Recall - testes pareados por corte
+======================================================================================================================
+   k  pair                        mean_diff        W     p_raw    p_holm   sig    r_rb      W/L/T       CI95 (bootstrap) CI_has_0
+----------------------------------------------------------------------------------------------------------------------
+  10  statistical-classical         +0.0001     36.5    0.5292    0.5292   nao +0.1978     8/5/37     [-0.0003, +0.0006]   sim
+  10  classical-quantum             +0.0007     89.5    0.0289    0.0579   nao +0.4900    20/6/24     [+0.0000, +0.0013]   nao
+  10  statistical-quantum           +0.0008     66.0    0.0094    0.0283   sim +0.5938    20/5/25     [+0.0002, +0.0015]   nao
+----------------------------------------------------------------------------------------------------------------------
+  25  statistical-classical         +0.0006    114.0    0.4654    0.4654   nao +0.1739   11/12/27     [-0.0005, +0.0018]   sim
+  25  classical-quantum             +0.0020    140.5    0.0025    0.0075   sim +0.5781    27/9/14     [+0.0008, +0.0033]   nao
+  25  statistical-quantum           +0.0025    192.0    0.0096    0.0193   sim +0.4818   27/11/12     [+0.0009, +0.0045]   nao
+----------------------------------------------------------------------------------------------------------------------
+  50  statistical-classical         -0.0000    200.5    0.7132    0.7132   nao +0.0782   17/12/21     [-0.0008, +0.0008]   sim
+  50  classical-quantum             +0.0026    245.5    0.0165    0.0372   sim +0.4297    29/12/9     [+0.0009, +0.0045]   nao
+  50  statistical-quantum           +0.0026    237.5    0.0124    0.0372   sim +0.4483    28/13/9     [+0.0008, +0.0045]   nao
+----------------------------------------------------------------------------------------------------------------------
+ 100  statistical-classical         -0.0000    296.0    0.9795    0.9795   nao +0.0050   17/17/16     [-0.0012, +0.0011]   sim
+ 100  classical-quantum             +0.0046    295.5    0.0074    0.0149   sim +0.4533    30/16/4     [+0.0018, +0.0077]   nao
+ 100  statistical-quantum           +0.0046    264.5    0.0043    0.0129   sim +0.4889    29/16/5     [+0.0019, +0.0076]   nao
+----------------------------------------------------------------------------------------------------------------------
+Metodo Wilcoxon usado por comparacao:
+  k= 10  statistical-classical      -> normal approximation
+  k= 10  classical-quantum          -> normal approximation
+  k= 10  statistical-quantum        -> normal approximation
+  k= 25  statistical-classical      -> normal approximation
+  k= 25  classical-quantum          -> normal approximation
+  k= 25  statistical-quantum        -> normal approximation
+  k= 50  statistical-classical      -> normal approximation
+  k= 50  classical-quantum          -> normal approximation
+  k= 50  statistical-quantum        -> normal approximation
+  k=100  statistical-classical      -> normal approximation
+  k=100  classical-quantum          -> normal approximation
+  k=100  statistical-quantum        -> normal approximation
+
+======================================================================================================================
+MRR - testes pareados por corte
+======================================================================================================================
+   k  pair                        mean_diff        W     p_raw    p_holm   sig    r_rb      W/L/T       CI95 (bootstrap) CI_has_0
+----------------------------------------------------------------------------------------------------------------------
+  10  statistical-classical         +0.0245     13.0    0.1389    0.4167   nao +0.5273     7/3/40     [-0.0017, +0.0615]   sim
+  10  classical-quantum             +0.0042     81.5    0.8612    0.8612   nao +0.0468    10/8/32     [-0.0491, +0.0564]   sim
+  10  statistical-quantum           +0.0287     66.5    0.4067    0.8134   nao +0.2222    10/8/32     [-0.0338, +0.0938]   sim
+----------------------------------------------------------------------------------------------------------------------
+  25  statistical-classical         +0.0229     18.0    0.1819    0.5456   nao +0.4545     7/4/39     [-0.0031, +0.0602]   sim
+  25  classical-quantum             +0.0041     82.5    0.8957    0.8957   nao +0.0351    10/8/32     [-0.0484, +0.0554]   sim
+  25  statistical-quantum           +0.0270     66.5    0.4073    0.8146   nao +0.2222    10/8/32     [-0.0341, +0.0908]   sim
+----------------------------------------------------------------------------------------------------------------------
+  50  statistical-classical         +0.0229     18.0    0.1819    0.5456   nao +0.4545     7/4/39     [-0.0031, +0.0602]   sim
+  50  classical-quantum             +0.0041     82.5    0.8957    0.8957   nao +0.0351    10/8/32     [-0.0484, +0.0554]   sim
+  50  statistical-quantum           +0.0270     66.5    0.4073    0.8146   nao +0.2222    10/8/32     [-0.0341, +0.0908]   sim
+----------------------------------------------------------------------------------------------------------------------
+ 100  statistical-classical         +0.0232     21.0    0.1576    0.4729   nao +0.4615     8/4/38     [-0.0028, +0.0604]   sim
+ 100  classical-quantum             +0.0038     92.5    0.9196    0.9196   nao +0.0263    10/9/31     [-0.0485, +0.0551]   sim
+ 100  statistical-quantum           +0.0270     75.5    0.4321    0.8641   nao +0.2053    10/9/31     [-0.0342, +0.0908]   sim
+----------------------------------------------------------------------------------------------------------------------
+Metodo Wilcoxon usado por comparacao:
+  k= 10  statistical-classical      -> normal approximation
+  k= 10  classical-quantum          -> normal approximation
+  k= 10  statistical-quantum        -> normal approximation
+  k= 25  statistical-classical      -> normal approximation
+  k= 25  classical-quantum          -> normal approximation
+  k= 25  statistical-quantum        -> normal approximation
+  k= 50  statistical-classical      -> normal approximation
+  k= 50  classical-quantum          -> normal approximation
+  k= 50  statistical-quantum        -> normal approximation
+  k=100  statistical-classical      -> normal approximation
+  k=100  classical-quantum          -> normal approximation
+  k=100  statistical-quantum        -> normal approximation
+
+======================================================================================================================
+P - testes pareados por corte
+======================================================================================================================
+   k  pair                        mean_diff        W     p_raw    p_holm   sig    r_rb      W/L/T       CI95 (bootstrap) CI_has_0
+----------------------------------------------------------------------------------------------------------------------
+  10  statistical-classical         +0.0080     22.5    0.0987    0.0987   nao +0.5055     8/5/37     [-0.0080, +0.0240]   sim
+  10  classical-quantum             +0.0320     90.0    0.0254    0.0508   nao +0.4872    20/6/24     [+0.0100, +0.0560]   nao
+  10  statistical-quantum           +0.0400     57.0    0.0040    0.0120   sim +0.6492    20/5/25     [+0.0140, +0.0660]   nao
+----------------------------------------------------------------------------------------------------------------------
+  25  statistical-classical         +0.0024    127.5    0.7481    0.7481   nao +0.0761   11/12/27     [-0.0104, +0.0152]   sim
+  25  classical-quantum             +0.0264    184.0    0.0190    0.0570   nao +0.4474    27/9/14     [+0.0096, +0.0456]   nao
+  25  statistical-quantum           +0.0288    235.5    0.0499    0.0999   nao +0.3644   27/11/12     [+0.0064, +0.0520]   nao
+----------------------------------------------------------------------------------------------------------------------
+  50  statistical-classical         +0.0012    210.0    0.8685    0.8685   nao +0.0345   17/12/21     [-0.0056, +0.0080]   sim
+  50  classical-quantum             +0.0168    255.0    0.0228    0.0457   sim +0.4077    29/12/9     [+0.0032, +0.0300]   nao
+  50  statistical-quantum           +0.0180    243.5    0.0152    0.0457   sim +0.4344    28/13/9     [+0.0036, +0.0320]   nao
+----------------------------------------------------------------------------------------------------------------------
+ 100  statistical-classical         -0.0002    280.0    0.7627    0.7627   nao -0.0588   17/17/16     [-0.0048, +0.0044]   sim
+ 100  classical-quantum             +0.0188    285.5    0.0053    0.0159   sim +0.4718    30/16/4     [+0.0072, +0.0318]   nao
+ 100  statistical-quantum           +0.0186    279.0    0.0071    0.0159   sim +0.4609    29/16/5     [+0.0072, +0.0310]   nao
+----------------------------------------------------------------------------------------------------------------------
+Metodo Wilcoxon usado por comparacao:
+  k= 10  statistical-classical      -> normal approximation
+  k= 10  classical-quantum          -> normal approximation
+  k= 10  statistical-quantum        -> normal approximation
+  k= 25  statistical-classical      -> normal approximation
+  k= 25  classical-quantum          -> normal approximation
+  k= 25  statistical-quantum        -> normal approximation
+  k= 50  statistical-classical      -> normal approximation
+  k= 50  classical-quantum          -> normal approximation
+  k= 50  statistical-quantum        -> normal approximation
+  k=100  statistical-classical      -> normal approximation
+  k=100  classical-quantum          -> normal approximation
+  k=100  statistical-quantum        -> normal approximation
+
+======================================================================================================================
+TABELA-RESUMO (par x corte): p_holm e r rank-biserial por metrica
+======================================================================================================================
+pair                          k     nDCG p   nDCG r  Recall p  Recall r     MRR p    MRR r       P p      P r
+----------------------------------------------------------------------------------------------------------------------
+statistical-classical        10     0.1951  +0.2585    0.5292   +0.1978    0.4167  +0.5273    0.0987  +0.5055
+statistical-classical        25     0.5248  +0.1054    0.4654   +0.1739    0.5456  +0.4545    0.7481  +0.0761
+statistical-classical        50     0.2203  +0.2032    0.7132   +0.0782    0.5456  +0.4545    0.8685  +0.0345
+statistical-classical       100     0.4515  +0.1224    0.9795   +0.0050    0.4729  +0.4615    0.7627  -0.0588
+----------------------------------------------------------------------------------------------------------------------
+classical-quantum            10     0.0174  +0.4821    0.0579   +0.4900    0.8612  +0.0468    0.0508  +0.4872
+classical-quantum            25     0.0053  +0.5135    0.0075   +0.5781    0.8957  +0.0351    0.0570  +0.4474
+classical-quantum            50     0.0058  +0.4890    0.0372   +0.4297    0.8957  +0.0351    0.0457  +0.4077
+classical-quantum           100     0.0015  +0.5341    0.0149   +0.4533    0.9196  +0.0263    0.0159  +0.4718
+----------------------------------------------------------------------------------------------------------------------
+statistical-quantum          10     0.0076  +0.5412    0.0283   +0.5938    0.8134  +0.2222    0.0120  +0.6492
+statistical-quantum          25     0.0066  +0.4824    0.0193   +0.4818    0.8146  +0.2222    0.0999  +0.3644
+statistical-quantum          50     0.0024  +0.5494    0.0372   +0.4483    0.8146  +0.2222    0.0457  +0.4344
+statistical-quantum         100     0.0008  +0.5937    0.0129   +0.4889    0.8641  +0.2053    0.0159  +0.4609
+----------------------------------------------------------------------------------------------------------------------
+
+Linhas: paired_tests_all_metrics.csv=48  |  table_iv_all_metrics.csv=12
+Arquivos gerados: paired_tests_all_metrics.csv, table_iv_all_metrics.csv, paired_tests_all_metrics_output.txt

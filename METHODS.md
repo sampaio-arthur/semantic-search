@@ -247,9 +247,10 @@ p_tost  = max(p_lower, p_upper)
 
 Conclui-se equivalencia quando `p_tost` corrigido por Holm fica abaixo de
 `alfa = 0.05`. Registra-se tambem o intervalo de confianca t de 90%
-(`d_barra +/- t_{0.95, df} x se`), cuja relacao com o TOST e direta: o teste
-aceita equivalencia exatamente quando esse intervalo esta contido em
-`(-delta, +delta)`.
+(`d_barra +/- t_{0.95, df} x se`), cuja relacao com o TOST e direta: sem
+correcao para multiplas comparacoes, o teste aceita equivalencia exatamente
+quando esse intervalo esta contido em `(-delta, +delta)`. Com a correcao de
+Holm o criterio fica mais exigente, e a decisao final segue `p_tost_holm`.
 
 **Por que t e nao Wilcoxon.** A margem de 5% esta definida sobre a **media** da
 metrica. O teste de Wilcoxon testa a pseudo-mediana de Hodges-Lehmann, que e um
@@ -313,3 +314,65 @@ Todos em `core/data/results/csv/`:
 - `equivalence_output.txt` — saida de console completa da execucao, incluindo as
   versoes de Python, numpy e scipy e os parametros `BOOTSTRAP_RESAMPLES`,
   `BOOTSTRAP_SEED` e `ALPHA`.
+
+## Testes pareados nas quatro metricas
+
+### Motivo
+
+A analise de `statistical_analysis.py` aplica o teste de Wilcoxon pareado
+apenas ao nDCG (constante `TARGET_METRIC`), e o `paired_tests.csv` cobre so
+essa metrica. Como o artigo reporta 4 metricas (nDCG, Recall, MRR, Precision)
+em 4 cortes, o mesmo procedimento inferencial e estendido as outras tres, para
+que nenhuma metrica apresentada na comparacao entre pipelines fique sem teste
+de significancia.
+
+### Procedimento
+
+O procedimento e **identico** ao de `statistical_analysis.py`, trocando apenas
+a metrica fixa por um laco sobre as 4 metricas de `METRICS`:
+
+- Teste de Wilcoxon signed-rank **bilateral** para cada par de pipelines
+  (`zero_method="wilcox"`, `correction=False`, `method="auto"`).
+- Correcao de **Holm-Bonferroni** com familia = os **3 pares dentro de cada
+  (metrica, corte)**, a mesma regra do script original; `alfa = 0.05`.
+- Tamanho de efeito pela **correlacao rank-biserial** pareada.
+- Intervalo de confianca de **95% por bootstrap pareado** das diferencas, com
+  `BOOTSTRAP_RESAMPLES = 10000` e `BOOTSTRAP_SEED = 42`. O gerador e recriado
+  a cada (metrica, corte) e consumido em sequencia pelos 3 pares, na ordem de
+  `PAIRS`, exatamente como o script original faz por corte.
+
+O carregamento, a validacao e as rotinas de teste sao reaproveitados de
+`statistical_analysis.py` (`load_all`, `METRICS`, `K_VALUES`, `PAIRS`, `ALPHA`,
+`BOOTSTRAP_SEED`, `rank_biserial`, `wilcoxon_method_used`,
+`paired_bootstrap_ci`, `holm_bonferroni`, `write_csv`), de modo que o formato
+numerico das saidas e o mesmo. Nenhum arquivo pre-existente e modificado.
+Dependencias: numpy e scipy.
+
+Como consequencia direta dessa reutilizacao, **as 12 linhas de nDCG de
+`paired_tests_all_metrics.csv` reproduzem exatamente o `paired_tests.csv`**
+(mesmos valores numericos, ate a tolerancia de 1e-12, e mesmos rotulos e
+booleanos), o que serve como verificacao de que a extensao nao alterou o
+procedimento original.
+
+### Execucao
+
+```
+cd core/data/results/csv
+python paired_tests_all_metrics.py
+```
+
+### Arquivos gerados
+
+Todos em `core/data/results/csv/`:
+
+- `paired_tests_all_metrics.csv` — 48 linhas (4 metricas x 4 cortes x 3 pares),
+  com as mesmas colunas e na mesma ordem do `paired_tests.csv`: medias dos dois
+  pipelines, diferenca media, vitorias/derrotas/empates, estatistica W, somas de
+  postos, p bruto e por Holm, decisao de significancia, metodo do Wilcoxon,
+  rank-biserial e IC bootstrap de 95%.
+- `table_iv_all_metrics.csv` — 12 linhas (3 pares x 4 cortes) com `p_holm` e o
+  rank-biserial de cada uma das 4 metricas lado a lado, para uso direto na
+  tabela do artigo. Os valores sao copiados do CSV anterior, sem recalculo.
+- `paired_tests_all_metrics_output.txt` — saida de console completa da execucao,
+  incluindo as versoes de Python, numpy e scipy e os parametros
+  `BOOTSTRAP_RESAMPLES`, `BOOTSTRAP_SEED` e `ALPHA`.
